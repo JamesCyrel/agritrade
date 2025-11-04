@@ -18,6 +18,9 @@ router.post('/verifications/:userId/approve', adminController.approveFarmer);
 // Reject
 router.post('/verifications/:userId/reject', adminController.rejectFarmer);
 
+// List users (optional filters: ?role=FARMER&status=PENDING_REVIEW)
+router.get('/users', adminController.listUsers);
+
 module.exports = router;
 
 

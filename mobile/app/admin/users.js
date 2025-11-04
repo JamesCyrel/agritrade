@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,13 +6,29 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { adminAPI } from "../../services/api";
 
 export default function AdminUsersScreen() {
-  const users = [
-    { name: "Priya S.", role: "Consumer", status: "Active", email: "priya@example.com" },
-    { name: "Ramesh K.", role: "Farmer", status: "Pending Verification", email: "ramesh@example.com" },
-    { name: "Raj M.", role: "Consumer", status: "Active", email: "raj@example.com" },
-  ];
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const res = await adminAPI.listUsers(token);
+      setUsers(res.data || []);
+    } catch (e) {
+      console.log(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -22,48 +38,105 @@ export default function AdminUsersScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>All Users</Text>
-        {users.map((user, index) => (
-          <TouchableOpacity key={index} style={styles.userCard}>
-            <View style={styles.userHeader}>
-              <View style={styles.avatarContainer}>
-                <Text style={styles.avatar}>
-                  {user.role === "Farmer" ? "🌾" : "👤"}
-                </Text>
-              </View>
-              <View style={styles.userInfo}>
-                <Text style={styles.userName}>{user.name}</Text>
-                <Text style={styles.userEmail}>{user.email}</Text>
-                <Text style={styles.userRole}>{user.role}</Text>
-              </View>
-              <View
-                style={[
-                  styles.statusBadge,
-                  {
-                    backgroundColor:
-                      user.status === "Active"
-                        ? "#d4edda"
-                        : "#fff3cd",
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    {
-                      color:
-                        user.status === "Active"
-                          ? "#155724"
-                          : "#856404",
-                    },
-                  ]}
-                >
-                  {user.status}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {loading ? (
+          <Text style={{ color: "#666" }}>Loading...</Text>
+        ) : users.length === 0 ? (
+          <Text style={{ color: "#666" }}>No users found.</Text>
+        ) : (
+          <View>
+            {/* Farmers */}
+            <Text style={styles.groupTitle}>Farmers</Text>
+            {users.filter(u => u.role === 'FARMER').length === 0 ? (
+              <Text style={styles.emptyGroup}>No farmers.</Text>
+            ) : (
+              users.filter(u => u.role === 'FARMER').map((user, index) => (
+                <TouchableOpacity key={`F-${user.user_id}-${index}`} style={styles.userCard}>
+                  <View style={styles.userHeader}>
+                    <View style={styles.avatarContainer}>
+                      <Text style={styles.avatar}>🌾</Text>
+                    </View>
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{user.farm_name || user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
+                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
+                      <Text style={styles.userRole}>{user.role}</Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        {
+                          backgroundColor:
+                            user.verification_status === 'APPROVED'
+                              ? '#d4edda'
+                              : user.verification_status === 'REJECTED'
+                              ? '#fee'
+                              : '#fff3cd',
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusText,
+                          {
+                            color:
+                              user.verification_status === 'APPROVED'
+                                ? '#155724'
+                                : user.verification_status === 'REJECTED'
+                                ? '#dc3545'
+                                : '#856404',
+                          },
+                        ]}
+                      >
+                        {user.verification_status || 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+
+            {/* Consumers */}
+            <Text style={styles.groupTitle}>Consumers</Text>
+            {users.filter(u => u.role === 'CONSUMER').length === 0 ? (
+              <Text style={styles.emptyGroup}>No consumers.</Text>
+            ) : (
+              users.filter(u => u.role === 'CONSUMER').map((user, index) => (
+                <TouchableOpacity key={`C-${user.user_id}-${index}`} style={styles.userCard}>
+                  <View style={styles.userHeader}>
+                    <View style={styles.avatarContainer}>
+                      <Text style={styles.avatar}>👤</Text>
+                    </View>
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
+                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
+                      <Text style={styles.userRole}>{user.role}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+
+            {/* Admins */}
+            <Text style={styles.groupTitle}>Admins</Text>
+            {users.filter(u => u.role === 'ADMIN').length === 0 ? (
+              <Text style={styles.emptyGroup}>No admins.</Text>
+            ) : (
+              users.filter(u => u.role === 'ADMIN').map((user, index) => (
+                <TouchableOpacity key={`A-${user.user_id}-${index}`} style={styles.userCard}>
+                  <View style={styles.userHeader}>
+                    <View style={styles.avatarContainer}>
+                      <Text style={styles.avatar}>👤</Text>
+                    </View>
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
+                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
+                      <Text style={styles.userRole}>{user.role}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -99,6 +172,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#333",
     marginBottom: 12,
+  },
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2d5016",
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  emptyGroup: {
+    color: "#666",
+    marginBottom: 8,
   },
   userCard: {
     backgroundColor: "#fff",

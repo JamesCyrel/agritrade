@@ -104,5 +104,12 @@ export const adminAPI = {
   reject: async (token, userId, reason) => {
     return await apiCall(`/admin/verifications/${userId}/reject`, 'POST', { reason }, token);
   },
+  listUsers: async (token, { role, status } = {}) => {
+    const q = new URLSearchParams();
+    if (role) q.append('role', role);
+    if (status) q.append('status', status);
+    const qs = q.toString();
+    return await apiCall(`/admin/users${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
 };
 
