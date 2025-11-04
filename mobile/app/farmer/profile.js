@@ -1,0 +1,222 @@
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import { useRouter } from "expo-router";
+
+export default function FarmerProfileScreen() {
+  const router = useRouter();
+
+  const profileMenuItems = [
+    {
+      title: "Farm Profile",
+      icon: "🌾",
+      onPress: () => console.log("Farm Profile"),
+    },
+    {
+      title: "My Products",
+      icon: "📦",
+      onPress: () => console.log("My Products"),
+    },
+    {
+      title: "My Orders",
+      icon: "📋",
+      onPress: () => console.log("My Orders"),
+    },
+    {
+      title: "Earnings",
+      icon: "💰",
+      onPress: () => console.log("Earnings"),
+    },
+    {
+      title: "Reviews",
+      icon: "⭐",
+      onPress: () => console.log("Reviews"),
+    },
+    {
+      title: "Bank Details",
+      icon: "🏦",
+      onPress: () => console.log("Bank Details"),
+    },
+    {
+      title: "Help & Support",
+      icon: "❓",
+      onPress: () => console.log("Help & Support"),
+    },
+  ];
+
+  const handleLogout = () => {
+    router.replace("/auth/login");
+  };
+
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>My Profile</Text>
+        <Text style={styles.headerSubtitle}>Manage your farm account</Text>
+      </View>
+
+      <ScrollView style={styles.content}>
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <Text style={styles.avatar}>🌾</Text>
+          </View>
+          <Text style={styles.name}>Farm Name</Text>
+          <Text style={styles.email}>farmer@example.com</Text>
+          <Text style={styles.role}>Farmer</Text>
+          <View style={styles.verificationBadge}>
+            <Text style={styles.verificationText}>✓ Verified</Text>
+          </View>
+        </View>
+
+        <View style={styles.menuSection}>
+          {profileMenuItems.map((item, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.menuItem}
+              onPress={item.onPress}
+            >
+              <Text style={styles.menuIcon}>{item.icon}</Text>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuArrow}>›</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  header: {
+    backgroundColor: "#2d5016",
+    padding: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: "#e0e0e0",
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  profileCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 24,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "#f0f0f0",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  avatar: {
+    fontSize: 40,
+  },
+  name: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 4,
+  },
+  email: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 8,
+  },
+  role: {
+    fontSize: 12,
+    color: "#2d5016",
+    fontWeight: "600",
+    backgroundColor: "#e8f5e9",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  verificationBadge: {
+    backgroundColor: "#d4edda",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  verificationText: {
+    color: "#155724",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  menuSection: {
+    marginBottom: 24,
+  },
+  menuItem: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  menuIcon: {
+    fontSize: 24,
+    marginRight: 16,
+  },
+  menuTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#333",
+  },
+  menuArrow: {
+    fontSize: 24,
+    color: "#999",
+  },
+  logoutButton: {
+    backgroundColor: "#dc3545",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  logoutButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+});
+
