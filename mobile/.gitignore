@@ -3,6 +3,9 @@
 # dependencies
 node_modules/
 
+
+SETUP_BACKEND.md
+
 # Expo
 .expo/
 dist/

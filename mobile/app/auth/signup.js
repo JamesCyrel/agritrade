@@ -7,8 +7,11 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { authAPI } from "../../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -17,8 +20,9 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("CONSUMER");
+  const [loading, setLoading] = useState(false);
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (!email && !phone) {
       Alert.alert("Error", "Please provide either email or phone number");
       return;
@@ -34,16 +38,34 @@ export default function SignupScreen() {
       return;
     }
 
-    // Static navigation - for demo purposes
-    Alert.alert("Signup", "Signup functionality will be implemented later");
-    
-    // Navigate to appropriate home based on role
-    if (selectedRole === "ADMIN") {
-      router.push("/admin/home");
-    } else if (selectedRole === "FARMER") {
-      router.push("/farmer/home");
-    } else {
-      router.push("/consumer/home");
+    setLoading(true);
+
+    try {
+      const response = await authAPI.signup(
+        email || null,
+        phone || null,
+        password,
+        selectedRole
+      );
+
+      if (response.success) {
+        // Store token
+        await AsyncStorage.setItem('authToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+
+        // Navigate to role-specific home screen
+        router.replace(response.data.redirectPath);
+      } else {
+        Alert.alert("Signup Failed", response.message || "Unable to create account");
+      }
+    } catch (error) {
+      console.error("Signup error:", error);
+      Alert.alert(
+        "Signup Error",
+        error.message || "Unable to connect to server. Please check your internet connection."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -95,22 +117,7 @@ export default function SignupScreen() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[
-              styles.roleButton,
-              selectedRole === "ADMIN" && styles.roleButtonActive,
-            ]}
-            onPress={() => setSelectedRole("ADMIN")}
-          >
-            <Text
-              style={[
-                styles.roleButtonText,
-                selectedRole === "ADMIN" && styles.roleButtonTextActive,
-              ]}
-            >
-              Admin
-            </Text>
-          </TouchableOpacity>
+          
         </View>
 
         <Text style={styles.label}>Email</Text>
@@ -150,8 +157,16 @@ export default function SignupScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.signupButton} onPress={handleSignup}>
-          <Text style={styles.signupButtonText}>Sign Up</Text>
+        <TouchableOpacity
+          style={[styles.signupButton, loading && styles.signupButtonDisabled]}
+          onPress={handleSignup}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.signupButtonText}>Sign Up</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.divider}>
@@ -251,6 +266,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 24,
     marginBottom: 20,
+  },
+  signupButtonDisabled: {
+    opacity: 0.6,
   },
   signupButtonText: {
     color: "#fff",

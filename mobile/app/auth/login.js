@@ -6,27 +6,59 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { authAPI } from "../../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
+  const handleLogin = async () => {
+    if (!email && !password) {
+      Alert.alert("Error", "Please enter email/phone and password");
       return;
     }
 
-    // Static navigation - for demo purposes
-    // In real app, this would check credentials and navigate based on role
-    Alert.alert("Login", "Login functionality will be implemented later");
-    
-    // For now, navigate to consumer home (default)
-    // You can change this to test different roles
-    router.push("/consumer/home");
+    if (!password) {
+      Alert.alert("Error", "Please enter your password");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Determine if input is email or phone
+      const isEmail = email.includes('@');
+      const response = await authAPI.login(
+        isEmail ? email : null,
+        isEmail ? null : email,
+        password
+      );
+      
+      if (response.success) {
+        // Store token
+        await AsyncStorage.setItem('authToken', response.data.token);
+        await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
+
+        // Navigate to role-specific home screen
+        router.replace(response.data.redirectPath);
+      } else {
+        Alert.alert("Login Failed", response.message || "Invalid credentials");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      Alert.alert(
+        "Login Error",
+        error.message || "Unable to connect to server. Please check your internet connection."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const navigateToSignup = () => {
@@ -64,8 +96,16 @@ export default function LoginScreen() {
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>Login</Text>
+        <TouchableOpacity
+          style={[styles.loginButton, loading && styles.loginButtonDisabled]}
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.loginButtonText}>Login</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.divider}>
@@ -144,6 +184,9 @@ const styles = StyleSheet.create({
     padding: 16,
     alignItems: "center",
     marginBottom: 20,
+  },
+  loginButtonDisabled: {
+    opacity: 0.6,
   },
   loginButtonText: {
     color: "#fff",
