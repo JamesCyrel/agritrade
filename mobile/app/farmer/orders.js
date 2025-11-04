@@ -6,19 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-import { useRouter } from "expo-router";
 
-export default function FarmerHomeScreen() {
-  const router = useRouter();
-
-  const quickStats = [
-    { label: "Pending Orders", value: "3", color: "#ff9800" },
-    { label: "Total Earnings", value: "₹12,450", color: "#2d5016" },
-    { label: "Active Products", value: "8", color: "#2196f3" },
-    { label: "Rating", value: "4.7 ⭐", color: "#ffc107" },
-  ];
-
-  const recentOrders = [
+export default function FarmerOrdersScreen() {
+  const orders = [
     { id: "#1234", customer: "Priya S.", amount: "₹850", status: "Pending" },
     { id: "#1235", customer: "Raj K.", amount: "₹1,200", status: "Confirmed" },
     { id: "#1236", customer: "Anita M.", amount: "₹950", status: "Out for Delivery" },
@@ -27,37 +17,13 @@ export default function FarmerHomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Farm Dashboard</Text>
-        <Text style={styles.headerSubtitle}>Welcome back! 👋</Text>
+        <Text style={styles.headerTitle}>My Orders</Text>
+        <Text style={styles.headerSubtitle}>Manage your orders</Text>
       </View>
 
       <ScrollView style={styles.content}>
-        <View style={styles.alertBanner}>
-          <Text style={styles.alertText}>
-            ⚠️ You have 3 new orders waiting for confirmation
-          </Text>
-        </View>
-
-        <View style={styles.statsGrid}>
-          {quickStats.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <Text style={[styles.statValue, { color: stat.color }]}>
-                {stat.value}
-              </Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <Text style={styles.sectionTitle}>Recent Orders</Text>
-        {recentOrders.map((order, index) => (
-          <TouchableOpacity
-            key={index}
-            style={styles.orderCard}
-            onPress={() => {
-              console.log(`View order ${order.id}`);
-            }}
-          >
+        {orders.map((order, index) => (
+          <TouchableOpacity key={index} style={styles.orderCard}>
             <View style={styles.orderHeader}>
               <Text style={styles.orderId}>{order.id}</Text>
               <View
@@ -133,53 +99,6 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
-  },
-  alertBanner: {
-    backgroundColor: "#fff3cd",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: "#ff9800",
-  },
-  alertText: {
-    fontSize: 14,
-    color: "#856404",
-    fontWeight: "500",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    width: "47%",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: "#666",
-    textAlign: "center",
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
   },
   orderCard: {
     backgroundColor: "#fff",

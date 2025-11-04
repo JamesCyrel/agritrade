@@ -102,41 +102,6 @@ export default function ConsumerHomeScreen() {
             </ScrollView>
           </View>
         ))}
-
-        <View style={styles.quickActions}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                console.log("Navigate to My Orders");
-              }}
-            >
-              <Text style={styles.actionIcon}>📦</Text>
-              <Text style={styles.actionText}>My Orders</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                console.log("Navigate to Cart");
-              }}
-            >
-              <Text style={styles.actionIcon}>🛒</Text>
-              <Text style={styles.actionText}>Cart</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                console.log("Navigate to Favorites");
-              }}
-            >
-              <Text style={styles.actionIcon}>❤️</Text>
-              <Text style={styles.actionText}>Favorites</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
     </View>
   );
@@ -257,36 +222,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#2d5016",
     marginTop: 4,
-  },
-  quickActions: {
-    padding: 16,
-    marginBottom: 20,
-  },
-  actionRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 12,
-  },
-  actionButton: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    alignItems: "center",
-    width: 100,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  actionIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  actionText: {
-    fontSize: 12,
-    color: "#333",
-    fontWeight: "500",
   },
 });
 
