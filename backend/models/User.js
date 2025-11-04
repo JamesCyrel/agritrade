@@ -25,6 +25,9 @@ class User {
         bank_name VARCHAR(100),
         branch_code VARCHAR(20),
         verification_status VARCHAR(20) DEFAULT 'PENDING_DOCUMENTS' CHECK (verification_status IN ('PENDING_DOCUMENTS', 'PENDING_REVIEW', 'APPROVED', 'REJECTED')),
+        verification_reason TEXT,
+        latitude DECIMAL(10,7),
+        longitude DECIMAL(10,7),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -33,6 +36,16 @@ class User {
       CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
       CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
       CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
+
+      -- Ensure one profile per user
+      CREATE UNIQUE INDEX IF NOT EXISTS uq_profiles_user_id ON profiles(user_id);
+
+      -- Backfill columns if table existed before (safe no-ops if present)
+      DO $$ BEGIN
+        BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verification_reason TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7); EXCEPTION WHEN duplicate_column THEN NULL; END;
+        BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7); EXCEPTION WHEN duplicate_column THEN NULL; END;
+      END $$;
     `;
 
     try {

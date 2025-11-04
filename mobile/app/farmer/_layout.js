@@ -50,6 +50,13 @@ export default function FarmerLayout() {
         }}
       />
       <Tabs.Screen
+        name="verification"
+        options={{
+          title: "Verification",
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📝</Text>,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",

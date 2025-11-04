@@ -5,6 +5,8 @@ require('dotenv').config();
 const pool = require('./config/database');
 const User = require('./models/User');
 const authRoutes = require('./routes/authRoutes');
+const farmerRoutes = require('./routes/farmerRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +27,8 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/farmer', farmerRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Initialize database tables
 const initializeDatabase = async () => {
@@ -51,6 +55,17 @@ const startServer = async () => {
       console.log(`   POST /api/auth/signup`);
       console.log(`   POST /api/auth/login`);
       console.log(`   GET  /api/auth/verify`);
+      console.log(`
+🔧 Farmer endpoints:`);
+      console.log(`   GET  /api/farmer/profile`);
+      console.log(`   PUT  /api/farmer/profile`);
+      console.log(`   POST /api/farmer/verification/documents`);
+      console.log(`   GET  /api/farmer/verification/status`);
+      console.log(`\n🛡️ Admin endpoints:`);
+      console.log(`   GET  /api/admin/verifications/pending`);
+      console.log(`   GET  /api/admin/verifications/:userId`);
+      console.log(`   POST /api/admin/verifications/:userId/approve`);
+      console.log(`   POST /api/admin/verifications/:userId/reject`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

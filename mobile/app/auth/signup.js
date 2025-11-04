@@ -53,7 +53,12 @@ export default function SignupScreen() {
         await AsyncStorage.setItem('authToken', response.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
 
-        // Navigate to role-specific home screen
+        // If farmer, go to profile setup immediately
+        if (response.data.user.role === 'FARMER') {
+          router.replace('/farmer/profile-setup');
+          return;
+        }
+        // Otherwise default
         router.replace(response.data.redirectPath);
       } else {
         Alert.alert("Signup Failed", response.message || "Unable to create account");

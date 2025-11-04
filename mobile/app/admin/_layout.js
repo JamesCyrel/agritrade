@@ -36,6 +36,13 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="verifications"
+        options={{
+          title: "Verify",
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>✅</Text>,
+        }}
+      />
+      <Tabs.Screen
         name="users"
         options={{
           title: "Users",
