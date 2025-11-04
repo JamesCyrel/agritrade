@@ -164,10 +164,6 @@ export default function SignupScreen() {
           <Text style={styles.socialButtonText}>Sign up with Google</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.socialButton}>
-          <Text style={styles.socialButtonText}>Sign up with Facebook</Text>
-        </TouchableOpacity>
-
         <View style={styles.loginContainer}>
           <Text style={styles.loginText}>Already have an account? </Text>
           <TouchableOpacity onPress={navigateToLogin}>
