@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,102 +6,208 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Image,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { consumerAPI } from "../../services/api";
 
 export default function ConsumerHomeScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [homepageData, setHomepageData] = useState({
+    featured_farmers: [],
+    popular_varieties: [],
+    new_arrivals: [],
+  });
 
-  const featuredSections = [
-    {
-      title: "Featured Farmers",
-      items: [
-        { name: "Green Valley Farm", rating: "4.8", location: "15km away" },
-        { name: "Organic Rice Co.", rating: "4.9", location: "22km away" },
-        { name: "Premium Paddy", rating: "4.7", location: "30km away" },
-      ],
-    },
-    {
-      title: "Popular Rice Varieties",
-      items: [
-        { name: "Basmati Rice", price: "₹120/kg" },
-        { name: "Sona Masuri", price: "₹95/kg" },
-        { name: "Jasmine Rice", price: "₹110/kg" },
-      ],
-    },
-    {
-      title: "New Arrivals",
-      items: [
-        { name: "Organic Brown Rice", price: "₹140/kg" },
-        { name: "Red Rice", price: "₹130/kg" },
-      ],
-    },
-  ];
+  const loadHomepageData = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.getHomepage(token);
+      if (res.success) {
+        setHomepageData(res.data || {
+          featured_farmers: [],
+          popular_varieties: [],
+          new_arrivals: [],
+        });
+      }
+    } catch (error) {
+      console.error("Load homepage error:", error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    loadHomepageData();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadHomepageData();
+  };
+
+  const handleSearch = () => {
+    if (searchQuery.trim()) {
+      router.push({
+        pathname: "/consumer/search",
+        params: { q: searchQuery },
+      });
+    }
+  };
+
+  const renderProductCard = (product) => (
+    <TouchableOpacity
+      key={product.product_id}
+      style={styles.card}
+      onPress={() => router.push(`/consumer/products/${product.product_id}`)}
+    >
+      {product.images && product.images.length > 0 ? (
+        <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
+      ) : (
+        <View style={styles.cardImage}>
+          <Text style={styles.cardImagePlaceholder}>🌾</Text>
+        </View>
+      )}
+      <Text style={styles.cardTitle} numberOfLines={1}>
+        {product.variety_name}
+      </Text>
+      <Text style={styles.cardFarmName} numberOfLines={1}>
+        {product.farm_name}
+      </Text>
+      <Text style={styles.cardPrice}>₱{product.price_per_kg}/kg</Text>
+      {product.average_rating > 0 && (
+        <Text style={styles.cardRating}>
+          ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+
+  const renderFarmerCard = (farmer) => {
+    if (!farmer || !farmer.farmer_id) return null;
+    return (
+      <TouchableOpacity
+        key={farmer.farmer_id}
+        style={styles.card}
+        onPress={() => router.push(`/consumer/farmers/${farmer.farmer_id}/storefront`)}
+      >
+      <View style={styles.cardImage}>
+        <Text style={styles.cardImagePlaceholder}>🚜</Text>
+      </View>
+      <Text style={styles.cardTitle} numberOfLines={1}>
+        {farmer.farm_name || farmer.full_name}
+      </Text>
+      {farmer.address && (
+        <Text style={styles.cardLocation} numberOfLines={1}>
+          {farmer.address}
+        </Text>
+      )}
+      {farmer.average_rating > 0 && (
+        <Text style={styles.cardRating}>
+          ⭐ {farmer.average_rating.toFixed(1)} ({farmer.total_reviews} reviews)
+        </Text>
+      )}
+      <Text style={styles.cardProducts}>{farmer.product_count} products</Text>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#2d5016" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>AgriTrade</Text>
-          <TouchableOpacity
-            onPress={() => {
-              // Navigate to profile/cart
-              console.log("Navigate to profile");
-            }}
-          >
+          <TouchableOpacity onPress={() => router.push("/consumer/profile")}>
             <Text style={styles.headerIcon}>👤</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.headerSubtitle}>Fresh Rice, Direct from Farmers</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#2d5016"]} />}
+      >
         <View style={styles.searchContainer}>
           <TextInput
             style={styles.searchInput}
             placeholder="Search for rice varieties or farmers..."
             placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
           />
-          <TouchableOpacity style={styles.searchButton}>
+          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
             <Text style={styles.searchIcon}>🔍</Text>
           </TouchableOpacity>
         </View>
 
-        {featuredSections.map((section, sectionIndex) => (
-          <View key={sectionIndex} style={styles.section}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+        {/* Featured Farmers */}
+        {homepageData.featured_farmers && homepageData.featured_farmers.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Featured Farmers</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalScroll}
             >
-              {section.items.map((item, itemIndex) => (
-                <TouchableOpacity
-                  key={itemIndex}
-                  style={styles.card}
-                  onPress={() => {
-                    // Navigate to product/farmer details
-                    console.log(`Navigate to ${item.name}`);
-                  }}
-                >
-                  <View style={styles.cardImage}>
-                    <Text style={styles.cardImagePlaceholder}>🌾</Text>
-                  </View>
-                  <Text style={styles.cardTitle}>{item.name}</Text>
-                  {item.rating && (
-                    <Text style={styles.cardRating}>⭐ {item.rating}</Text>
-                  )}
-                  {item.location && (
-                    <Text style={styles.cardLocation}>{item.location}</Text>
-                  )}
-                  {item.price && (
-                    <Text style={styles.cardPrice}>{item.price}</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+              {homepageData.featured_farmers.map((farmer) => renderFarmerCard(farmer))}
             </ScrollView>
           </View>
-        ))}
+        )}
+
+        {/* Popular Rice Varieties */}
+        {homepageData.popular_varieties && homepageData.popular_varieties.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Popular Rice Varieties</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+            >
+              {homepageData.popular_varieties.map((product) => renderProductCard(product))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* New Arrivals */}
+        {homepageData.new_arrivals && homepageData.new_arrivals.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>New Arrivals</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.horizontalScroll}
+            >
+              {homepageData.new_arrivals.map((product) => renderProductCard(product))}
+            </ScrollView>
+          </View>
+        )}
+
+        {homepageData.featured_farmers?.length === 0 &&
+          homepageData.popular_varieties?.length === 0 &&
+          homepageData.new_arrivals?.length === 0 && (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No products available yet</Text>
+            </View>
+          )}
       </ScrollView>
     </View>
   );
@@ -111,6 +217,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   header: {
     backgroundColor: "#2d5016",
@@ -207,6 +317,11 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 4,
   },
+  cardFarmName: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 4,
+  },
   cardRating: {
     fontSize: 12,
     color: "#666",
@@ -223,5 +338,19 @@ const styles = StyleSheet.create({
     color: "#2d5016",
     marginTop: 4,
   },
+  cardProducts: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+  },
+  emptyState: {
+    alignItems: "center",
+    marginTop: 50,
+    padding: 20,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+  },
 });
-

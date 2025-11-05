@@ -9,9 +9,9 @@ import {
 
 export default function ConsumerOrdersScreen() {
   const orders = [
-    { id: "#1234", farmer: "Green Valley Farm", amount: "₹850", status: "Out for Delivery", date: "Today" },
-    { id: "#1235", farmer: "Organic Rice Co.", amount: "₹1,200", status: "Confirmed", date: "Yesterday" },
-    { id: "#1236", farmer: "Premium Paddy", amount: "₹950", status: "Delivered", date: "2 days ago" },
+    { id: "#1234", farmer: "Green Valley Farm", amount: "₱850", status: "Out for Delivery", date: "Today" },
+    { id: "#1235", farmer: "Organic Rice Co.", amount: "₱1,200", status: "Confirmed", date: "Yesterday" },
+    { id: "#1236", farmer: "Premium Paddy", amount: "₱950", status: "Delivered", date: "2 days ago" },
   ];
 
   return (

@@ -145,6 +145,32 @@ export const consumerAPI = {
   deletePaymentMethod: async (token, paymentId) => {
     return await apiCall(`/consumer/payment-methods/${paymentId}`, 'DELETE', null, token);
   },
+  // Search & Browsing (SB-1 to SB-5)
+  getHomepage: async (token) => {
+    return await apiCall('/consumer/homepage', 'GET', null, token);
+  },
+  searchProducts: async (token, params) => {
+    const queryString = new URLSearchParams();
+    if (params.q) queryString.append('q', params.q);
+    if (params.rice_type) queryString.append('rice_type', params.rice_type);
+    if (params.min_price) queryString.append('min_price', params.min_price);
+    if (params.max_price) queryString.append('max_price', params.max_price);
+    if (params.max_distance) queryString.append('max_distance', params.max_distance);
+    if (params.min_rating) queryString.append('min_rating', params.min_rating);
+    if (params.sort_by) queryString.append('sort_by', params.sort_by);
+    if (params.limit) queryString.append('limit', params.limit);
+    if (params.offset) queryString.append('offset', params.offset);
+    if (params.consumer_lat) queryString.append('consumer_lat', params.consumer_lat);
+    if (params.consumer_lng) queryString.append('consumer_lng', params.consumer_lng);
+    const query = queryString.toString();
+    return await apiCall(`/consumer/products/search${query ? `?${query}` : ''}`, 'GET', null, token);
+  },
+  getProductDetails: async (token, productId) => {
+    return await apiCall(`/consumer/products/${productId}`, 'GET', null, token);
+  },
+  getFarmerStorefront: async (token, farmerId) => {
+    return await apiCall(`/consumer/farmers/${farmerId}/storefront`, 'GET', null, token);
+  },
 };
 
 // Product API calls (Farmer)

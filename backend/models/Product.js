@@ -340,6 +340,371 @@ class Product {
     `, [farmerId]);
     return result.rows[0]?.verification_status === 'APPROVED';
   }
+
+  // ===== CONSUMER BROWSING METHODS =====
+
+  // Get homepage data: Featured Farmers, Popular Rice Varieties, New Arrivals
+  static async getHomepageData() {
+    const query = `
+      WITH farmer_stats AS (
+        SELECT 
+          p.farmer_id,
+          COUNT(DISTINCT p.product_id) as product_count,
+          AVG(p.price_per_kg) as avg_price,
+          pr.farm_name,
+          pr.full_name,
+          pr.address,
+          pr.latitude,
+          pr.longitude,
+          pr.verification_status,
+          -- Placeholder for ratings (will be implemented in RR-2)
+          0 as average_rating,
+          0 as total_reviews
+        FROM products p
+        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+        WHERE p.status = 'ACTIVE'
+          AND pr.verification_status = 'APPROVED'
+        GROUP BY p.farmer_id, pr.farm_name, pr.full_name, pr.address, pr.latitude, pr.longitude, pr.verification_status
+      ),
+      featured_farmers AS (
+        SELECT 
+          fs.farmer_id,
+          fs.farm_name,
+          fs.full_name,
+          fs.address,
+          fs.latitude,
+          fs.longitude,
+          fs.average_rating,
+          fs.total_reviews,
+          fs.product_count
+        FROM farmer_stats fs
+        ORDER BY fs.product_count DESC, fs.average_rating DESC
+        LIMIT 5
+      ),
+      popular_varieties AS (
+        SELECT 
+          p.product_id,
+          p.rice_type,
+          p.variety_name,
+          p.price_per_kg,
+          p.description,
+          p.available_quantity,
+          p.quantity_unit,
+          p.created_at,
+          pr.farm_name,
+          p.farmer_id,
+          -- Placeholder for ratings
+          0 as average_rating,
+          0 as total_reviews,
+          (SELECT array_agg(image_url ORDER BY image_order) 
+           FROM product_images 
+           WHERE product_id = p.product_id) as images
+        FROM products p
+        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+        WHERE p.status = 'ACTIVE'
+          AND pr.verification_status = 'APPROVED'
+          AND p.available_quantity > 0
+        ORDER BY p.available_quantity DESC, p.created_at DESC
+        LIMIT 10
+      ),
+      new_arrivals AS (
+        SELECT 
+          p.product_id,
+          p.rice_type,
+          p.variety_name,
+          p.price_per_kg,
+          p.description,
+          p.available_quantity,
+          p.quantity_unit,
+          p.created_at,
+          pr.farm_name,
+          p.farmer_id,
+          -- Placeholder for ratings
+          0 as average_rating,
+          0 as total_reviews,
+          (SELECT array_agg(image_url ORDER BY image_order) 
+           FROM product_images 
+           WHERE product_id = p.product_id) as images
+        FROM products p
+        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+        WHERE p.status = 'ACTIVE'
+          AND pr.verification_status = 'APPROVED'
+          AND p.available_quantity > 0
+        ORDER BY p.created_at DESC
+        LIMIT 10
+      )
+      SELECT 
+        (SELECT json_agg(row_to_json(f)) FROM featured_farmers f) as featured_farmers,
+        (SELECT json_agg(row_to_json(v)) FROM popular_varieties v) as popular_varieties,
+        (SELECT json_agg(row_to_json(n)) FROM new_arrivals n) as new_arrivals;
+    `;
+    const result = await pool.query(query);
+    return result.rows[0] || { featured_farmers: [], popular_varieties: [], new_arrivals: [] };
+  }
+
+  // Search products with filters and sorting (SB-2, SB-3)
+  static async searchProducts(searchParams) {
+    const {
+      searchQuery = '',
+      riceType = null,
+      minPrice = null,
+      maxPrice = null,
+      maxDistance = null,
+      consumerLat = null,
+      consumerLng = null,
+      minRating = null,
+      sortBy = 'created_at',
+      sortOrder = 'DESC',
+      limit = 20,
+      offset = 0
+    } = searchParams;
+
+    let query = `
+      SELECT 
+        p.product_id,
+        p.rice_type,
+        p.variety_name,
+        p.description,
+        p.price_per_kg,
+        p.available_quantity,
+        p.quantity_unit,
+        p.created_at,
+        p.farmer_id,
+        pr.farm_name,
+        pr.full_name as farmer_name,
+        pr.address as farmer_address,
+        pr.latitude as farmer_latitude,
+        pr.longitude as farmer_longitude,
+        -- Placeholder for ratings
+        0 as average_rating,
+        0 as total_reviews,
+        (SELECT array_agg(image_url ORDER BY image_order) 
+         FROM product_images 
+         WHERE product_id = p.product_id) as images,
+        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
+         FROM product_sack_sizes 
+         WHERE product_id = p.product_id) as sack_sizes,
+        NULL as distance_km
+    `;
+
+    query += `
+      FROM products p
+      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+      WHERE p.status = 'ACTIVE'
+        AND pr.verification_status = 'APPROVED'
+        AND p.available_quantity > 0
+    `;
+
+    const conditions = [];
+    const params = [];
+    let paramCount = 1;
+
+    // Search query (variety name or farmer name)
+    if (searchQuery.trim()) {
+      conditions.push(`(
+        p.variety_name ILIKE $${paramCount} OR 
+        pr.farm_name ILIKE $${paramCount} OR
+        pr.full_name ILIKE $${paramCount}
+      )`);
+      params.push(`%${searchQuery.trim()}%`);
+      paramCount++;
+    }
+
+    // Rice type filter
+    if (riceType && ['MILLED', 'UNMILLED_PADDY'].includes(riceType)) {
+      conditions.push(`p.rice_type = $${paramCount}`);
+      params.push(riceType);
+      paramCount++;
+    }
+
+    // Price range filter
+    if (minPrice !== null) {
+      conditions.push(`p.price_per_kg >= $${paramCount}`);
+      params.push(parseFloat(minPrice));
+      paramCount++;
+    }
+    if (maxPrice !== null) {
+      conditions.push(`p.price_per_kg <= $${paramCount}`);
+      params.push(parseFloat(maxPrice));
+      paramCount++;
+    }
+
+    // Rating filter (placeholder - will use actual ratings table later)
+    if (minRating !== null) {
+      // For now, we'll skip rating filter as ratings aren't implemented yet
+      // This will be updated when RR-2 is implemented
+    }
+
+    if (conditions.length > 0) {
+      query += ` AND ${conditions.join(' AND ')}`;
+    }
+
+    // Distance filter (after selecting, so we need a subquery or CTE)
+    if (maxDistance !== null && consumerLat && consumerLng) {
+      const baseQuery = query;
+      query = `
+        WITH filtered_products AS (
+          ${baseQuery}
+        )
+        SELECT *, 
+          (
+            6371 * acos(
+              cos(radians(${consumerLat})) * 
+              cos(radians(farmer_latitude::numeric)) * 
+              cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
+              sin(radians(${consumerLat})) * 
+              sin(radians(farmer_latitude::numeric))
+            )
+          ) as distance_km
+        FROM filtered_products
+        WHERE (
+          6371 * acos(
+            cos(radians(${consumerLat})) * 
+            cos(radians(farmer_latitude::numeric)) * 
+            cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
+            sin(radians(${consumerLat})) * 
+            sin(radians(farmer_latitude::numeric))
+          )
+        ) <= $${paramCount}
+      `;
+      params.push(parseFloat(maxDistance));
+      paramCount++;
+    } else if (consumerLat && consumerLng) {
+      // Calculate distance even if not filtering by it
+      const baseQuery = query;
+      query = `
+        SELECT *, 
+          (
+            6371 * acos(
+              cos(radians(${consumerLat})) * 
+              cos(radians(farmer_latitude::numeric)) * 
+              cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
+              sin(radians(${consumerLat})) * 
+              sin(radians(farmer_latitude::numeric))
+            )
+          ) as distance_km
+        FROM (${baseQuery}) as base_query
+      `;
+    }
+
+    // Sorting
+    const validSortFields = {
+      'price_low': 'p.price_per_kg ASC',
+      'price_high': 'p.price_per_kg DESC',
+      'rating': 'average_rating DESC', // Placeholder
+      'distance': 'distance_km ASC',
+      'newest': 'p.created_at DESC',
+      'oldest': 'p.created_at ASC'
+    };
+
+    const sortClause = validSortFields[sortBy] || 'p.created_at DESC';
+    query += ` ORDER BY ${sortClause}`;
+
+    // Pagination
+    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
+    params.push(parseInt(limit), parseInt(offset));
+
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+
+  // Get product details with farmer info (SB-4)
+  static async getProductDetailsForConsumer(productId) {
+    const query = `
+      SELECT 
+        p.product_id,
+        p.rice_type,
+        p.variety_name,
+        p.description,
+        p.price_per_kg,
+        p.available_quantity,
+        p.quantity_unit,
+        p.created_at,
+        p.updated_at,
+        p.farmer_id,
+        pr.farm_name,
+        pr.full_name as farmer_name,
+        pr.address as farmer_address,
+        pr.latitude as farmer_latitude,
+        pr.longitude as farmer_longitude,
+        -- Placeholder for ratings
+        0 as average_rating,
+        0 as total_reviews,
+        (SELECT array_agg(image_url ORDER BY image_order) 
+         FROM product_images 
+         WHERE product_id = p.product_id) as images,
+        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
+         FROM product_sack_sizes 
+         WHERE product_id = p.product_id) as sack_sizes
+      FROM products p
+      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+      WHERE p.product_id = $1
+        AND p.status = 'ACTIVE'
+        AND pr.verification_status = 'APPROVED'
+    `;
+    const result = await pool.query(query, [productId]);
+    return result.rows[0] || null;
+  }
+
+  // Get farmer storefront (SB-5)
+  static async getFarmerStorefront(farmerId) {
+    // Get farmer profile
+    const profileQuery = `
+      SELECT 
+        pr.user_id as farmer_id,
+        pr.farm_name,
+        pr.full_name,
+        pr.address,
+        pr.latitude,
+        pr.longitude,
+        pr.verification_status,
+        -- Placeholder for ratings
+        0 as average_rating,
+        0 as total_reviews
+      FROM profiles pr
+      WHERE pr.user_id = $1
+        AND pr.verification_status = 'APPROVED'
+    `;
+    const profileResult = await pool.query(profileQuery, [farmerId]);
+    if (profileResult.rows.length === 0) {
+      return null;
+    }
+
+    const farmerProfile = profileResult.rows[0];
+
+    // Get all active products
+    const productsQuery = `
+      SELECT 
+        p.product_id,
+        p.rice_type,
+        p.variety_name,
+        p.description,
+        p.price_per_kg,
+        p.available_quantity,
+        p.quantity_unit,
+        p.created_at,
+        -- Placeholder for ratings
+        0 as average_rating,
+        0 as total_reviews,
+        (SELECT array_agg(image_url ORDER BY image_order) 
+         FROM product_images 
+         WHERE product_id = p.product_id) as images,
+        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
+         FROM product_sack_sizes 
+         WHERE product_id = p.product_id) as sack_sizes
+      FROM products p
+      WHERE p.farmer_id = $1
+        AND p.status = 'ACTIVE'
+        AND p.available_quantity > 0
+      ORDER BY p.created_at DESC
+    `;
+    const productsResult = await pool.query(productsQuery, [farmerId]);
+
+    return {
+      farmer: farmerProfile,
+      products: productsResult.rows
+    };
+  }
 }
 
 module.exports = Product;

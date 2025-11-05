@@ -17,7 +17,7 @@ export default function AdminAnalyticsScreen() {
       <ScrollView style={styles.content}>
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>₹1.2M</Text>
+            <Text style={styles.statNumber}>₱1.2M</Text>
             <Text style={styles.statLabel}>Total GMV</Text>
           </View>
           <View style={styles.statCard}>
@@ -32,7 +32,7 @@ export default function AdminAnalyticsScreen() {
             <Text style={styles.statLabel}>Total Orders</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>₹45K</Text>
+            <Text style={styles.statNumber}>₱45K</Text>
             <Text style={styles.statLabel}>Platform Revenue</Text>
           </View>
         </View>
@@ -40,7 +40,7 @@ export default function AdminAnalyticsScreen() {
         <Text style={styles.sectionTitle}>Key Metrics</Text>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Average Order Value</Text>
-          <Text style={styles.metricValue}>₹2,115</Text>
+          <Text style={styles.metricValue}>₱2,115</Text>
         </View>
         <View style={styles.metricCard}>
           <Text style={styles.metricLabel}>Conversion Rate</Text>

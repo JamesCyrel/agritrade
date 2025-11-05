@@ -9,9 +9,9 @@ import {
 
 export default function ConsumerFavoritesScreen() {
   const favorites = [
-    { name: "Basmati Rice", farmer: "Green Valley Farm", price: "₹120/kg", rating: "4.8" },
-    { name: "Sona Masuri", farmer: "Organic Rice Co.", price: "₹95/kg", rating: "4.9" },
-    { name: "Jasmine Rice", farmer: "Premium Paddy", price: "₹110/kg", rating: "4.7" },
+    { name: "Basmati Rice", farmer: "Green Valley Farm", price: "₱120/kg", rating: "4.8" },
+    { name: "Sona Masuri", farmer: "Organic Rice Co.", price: "₱95/kg", rating: "4.9" },
+    { name: "Jasmine Rice", farmer: "Premium Paddy", price: "₱110/kg", rating: "4.7" },
   ];
 
   return (

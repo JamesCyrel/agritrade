@@ -9,9 +9,9 @@ import {
 
 export default function AdminOrdersScreen() {
   const orders = [
-    { id: "#1234", customer: "Priya S.", farmer: "Green Valley", amount: "₹850", status: "Pending" },
-    { id: "#1235", customer: "Raj K.", farmer: "Organic Rice Co.", amount: "₹1,200", status: "Confirmed" },
-    { id: "#1236", customer: "Anita M.", farmer: "Premium Paddy", amount: "₹950", status: "Out for Delivery" },
+    { id: "#1234", customer: "Priya S.", farmer: "Green Valley", amount: "₱850", status: "Pending" },
+    { id: "#1235", customer: "Raj K.", farmer: "Organic Rice Co.", amount: "₱1,200", status: "Confirmed" },
+    { id: "#1236", customer: "Anita M.", farmer: "Premium Paddy", amount: "₱950", status: "Out for Delivery" },
   ];
 
   return (

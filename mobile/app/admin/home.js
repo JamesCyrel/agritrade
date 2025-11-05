@@ -32,7 +32,7 @@ export default function AdminHomeScreen() {
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>₹1.2M</Text>
+            <Text style={styles.statNumber}>₱1.2M</Text>
             <Text style={styles.statLabel}>GMV</Text>
           </View>
           <View style={styles.statCard}>

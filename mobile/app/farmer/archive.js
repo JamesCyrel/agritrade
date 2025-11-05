@@ -123,7 +123,7 @@ export default function ArchiveScreen() {
             )}
 
             <View style={styles.productDetails}>
-              <Text style={styles.price}>₹{product.price_per_kg}/kg</Text>
+              <Text style={styles.price}>₱{product.price_per_kg}/kg</Text>
               <Text style={styles.quantity}>
                 Quantity: {product.available_quantity} {product.quantity_unit}
               </Text>

@@ -13,15 +13,15 @@ export default function FarmerHomeScreen() {
 
   const quickStats = [
     { label: "Pending Orders", value: "3", color: "#ff9800" },
-    { label: "Total Earnings", value: "₹12,450", color: "#2d5016" },
+    { label: "Total Earnings", value: "₱12,450", color: "#2d5016" },
     { label: "Active Products", value: "8", color: "#2196f3" },
     { label: "Rating", value: "4.7 ⭐", color: "#ffc107" },
   ];
 
   const recentOrders = [
-    { id: "#1234", customer: "Priya S.", amount: "₹850", status: "Pending" },
-    { id: "#1235", customer: "Raj K.", amount: "₹1,200", status: "Confirmed" },
-    { id: "#1236", customer: "Anita M.", amount: "₹950", status: "Out for Delivery" },
+    { id: "#1234", customer: "Priya S.", amount: "₱850", status: "Pending" },
+    { id: "#1235", customer: "Raj K.", amount: "₱1,200", status: "Confirmed" },
+    { id: "#1236", customer: "Anita M.", amount: "₱950", status: "Out for Delivery" },
   ];
 
   return (

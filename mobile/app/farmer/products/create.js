@@ -324,7 +324,7 @@ export default function CreateProductScreen() {
       />
 
       {/* Price per kg */}
-      <Text style={styles.label}>Price per Kilogram (₹) *</Text>
+      <Text style={styles.label}>Price per Kilogram (₱) *</Text>
       <TextInput
         style={styles.input}
         value={pricePerKg}
@@ -415,7 +415,7 @@ export default function CreateProductScreen() {
             style={[styles.input, styles.sackInput]}
             value={sack.price}
             onChangeText={(value) => updateSackSize(index, "price", value)}
-            placeholder="Price (₹)"
+            placeholder="Price (₱)"
             keyboardType="decimal-pad"
           />
           {sackSizes.length > 1 && (

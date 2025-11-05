@@ -8,15 +8,15 @@ import {
 
 export default function FarmerEarningsScreen() {
   const earnings = [
-    { period: "This Week", amount: "₹12,450", orders: 15 },
-    { period: "This Month", amount: "₹45,680", orders: 58 },
-    { period: "Total", amount: "₹2,34,500", orders: 312 },
+    { period: "This Week", amount: "₱12,450", orders: 15 },
+    { period: "This Month", amount: "₱45,680", orders: 58 },
+    { period: "Total", amount: "₱2,34,500", orders: 312 },
   ];
 
   const recentPayouts = [
-    { date: "15 Jan 2024", amount: "₹12,450", status: "Completed" },
-    { date: "8 Jan 2024", amount: "₹10,200", status: "Completed" },
-    { date: "1 Jan 2024", amount: "₹8,900", status: "Completed" },
+    { date: "15 Jan 2024", amount: "₱12,450", status: "Completed" },
+    { date: "8 Jan 2024", amount: "₱10,200", status: "Completed" },
+    { date: "1 Jan 2024", amount: "₱8,900", status: "Completed" },
   ];
 
   return (

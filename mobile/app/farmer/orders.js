@@ -9,9 +9,9 @@ import {
 
 export default function FarmerOrdersScreen() {
   const orders = [
-    { id: "#1234", customer: "Priya S.", amount: "₹850", status: "Pending" },
-    { id: "#1235", customer: "Raj K.", amount: "₹1,200", status: "Confirmed" },
-    { id: "#1236", customer: "Anita M.", amount: "₹950", status: "Out for Delivery" },
+    { id: "#1234", customer: "Priya S.", amount: "₱850", status: "Pending" },
+    { id: "#1235", customer: "Raj K.", amount: "₱1,200", status: "Confirmed" },
+    { id: "#1236", customer: "Anita M.", amount: "₱950", status: "Out for Delivery" },
   ];
 
   return (

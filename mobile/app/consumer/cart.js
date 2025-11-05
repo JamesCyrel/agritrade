@@ -9,8 +9,8 @@ import {
 
 export default function ConsumerCartScreen() {
   const cartItems = [
-    { name: "Basmati Rice", farmer: "Green Valley Farm", price: "₹120/kg", quantity: "5kg", total: "₹600" },
-    { name: "Sona Masuri", farmer: "Organic Rice Co.", price: "₹95/kg", quantity: "10kg", total: "₹950" },
+    { name: "Basmati Rice", farmer: "Green Valley Farm", price: "₱120/kg", quantity: "5kg", total: "₱600" },
+    { name: "Sona Masuri", farmer: "Organic Rice Co.", price: "₱95/kg", quantity: "10kg", total: "₱950" },
   ];
 
   const subtotal = 1550;
@@ -45,15 +45,15 @@ export default function ConsumerCartScreen() {
         <View style={styles.summary}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>₹{subtotal}</Text>
+            <Text style={styles.summaryValue}>₱{subtotal}</Text>
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Delivery Fee</Text>
-            <Text style={styles.summaryValue}>₹{deliveryFee}</Text>
+            <Text style={styles.summaryValue}>₱{deliveryFee}</Text>
           </View>
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{total}</Text>
+            <Text style={styles.totalValue}>₱{total}</Text>
           </View>
         </View>
 

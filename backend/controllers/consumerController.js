@@ -1,4 +1,5 @@
 const Consumer = require('../models/Consumer');
+const Product = require('../models/Product');
 
 // Get profile
 exports.getProfile = async (req, res) => {
@@ -145,6 +146,97 @@ exports.deletePaymentMethod = async (req, res) => {
   } catch (error) {
     console.error('deletePaymentMethod error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete payment method' });
+  }
+};
+
+// ===== SEARCH & BROWSING (SB-1 to SB-5) =====
+
+// SB-1: Get homepage data (Featured Farmers, Popular Varieties, New Arrivals)
+exports.getHomepage = async (req, res) => {
+  try {
+    const data = await Product.getHomepageData();
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('getHomepage error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch homepage data' });
+  }
+};
+
+// SB-2, SB-3: Search products with filters and sorting
+exports.searchProducts = async (req, res) => {
+  try {
+    const {
+      q: searchQuery,
+      rice_type: riceType,
+      min_price: minPrice,
+      max_price: maxPrice,
+      max_distance: maxDistance,
+      min_rating: minRating,
+      sort_by: sortBy,
+      limit,
+      offset,
+    } = req.query;
+
+    // Get consumer location if available (from profile or request)
+    // For now, we'll get it from query params, but ideally from consumer's saved address
+    const { consumer_lat, consumer_lng } = req.query;
+
+    const searchParams = {
+      searchQuery: searchQuery || '',
+      riceType,
+      minPrice: minPrice ? parseFloat(minPrice) : null,
+      maxPrice: maxPrice ? parseFloat(maxPrice) : null,
+      maxDistance: maxDistance ? parseFloat(maxDistance) : null,
+      consumerLat: consumer_lat ? parseFloat(consumer_lat) : null,
+      consumerLng: consumer_lng ? parseFloat(consumer_lng) : null,
+      minRating: minRating ? parseFloat(minRating) : null,
+      sortBy: sortBy || 'newest',
+      limit: limit ? parseInt(limit) : 20,
+      offset: offset ? parseInt(offset) : 0,
+    };
+
+    const products = await Product.searchProducts(searchParams);
+    res.json({ success: true, data: products, count: products.length });
+  } catch (error) {
+    console.error('searchProducts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to search products' });
+  }
+};
+
+// SB-4: Get product details with farmer info
+exports.getProductDetails = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    if (!productId || productId === 'undefined') {
+      return res.status(400).json({ success: false, message: 'Product ID is required' });
+    }
+    const product = await Product.getProductDetailsForConsumer(parseInt(productId));
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+    res.json({ success: true, data: product });
+  } catch (error) {
+    console.error('getProductDetails error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch product details' });
+  }
+};
+
+// SB-5: Get farmer storefront
+exports.getFarmerStorefront = async (req, res) => {
+  try {
+    const { farmerId } = req.params;
+    if (!farmerId || farmerId === 'undefined' || isNaN(parseInt(farmerId))) {
+      return res.status(400).json({ success: false, message: 'Farmer ID is required' });
+    }
+    const parsedFarmerId = parseInt(farmerId);
+    const storefront = await Product.getFarmerStorefront(parsedFarmerId);
+    if (!storefront) {
+      return res.status(404).json({ success: false, message: 'Farmer not found or not verified' });
+    }
+    res.json({ success: true, data: storefront });
+  } catch (error) {
+    console.error('getFarmerStorefront error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch farmer storefront' });
   }
 };
 

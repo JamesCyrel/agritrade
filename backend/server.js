@@ -93,6 +93,11 @@ const startServer = async () => {
       console.log(`   POST /api/consumer/payment-methods`);
       console.log(`   PUT  /api/consumer/payment-methods/:paymentId`);
       console.log(`   DELETE /api/consumer/payment-methods/:paymentId`);
+      console.log(`\n🔍 Consumer Browsing endpoints:`);
+      console.log(`   GET  /api/consumer/homepage`);
+      console.log(`   GET  /api/consumer/products/search`);
+      console.log(`   GET  /api/consumer/products/:productId`);
+      console.log(`   GET  /api/consumer/farmers/:farmerId/storefront`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
