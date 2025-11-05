@@ -63,6 +63,12 @@ export default function AdminLayout() {
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
         }}
       />
+      <Tabs.Screen
+        name="users/[userId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

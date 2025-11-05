@@ -92,6 +92,7 @@ export const farmerAPI = {
 
 // Admin API calls
 export const adminAPI = {
+  // Verifications
   listPending: async (token) => {
     return await apiCall('/admin/verifications/pending', 'GET', null, token);
   },
@@ -104,12 +105,42 @@ export const adminAPI = {
   reject: async (token, userId, reason) => {
     return await apiCall(`/admin/verifications/${userId}/reject`, 'POST', { reason }, token);
   },
+  // AD-1: User Management
   listUsers: async (token, { role, status } = {}) => {
     const q = new URLSearchParams();
     if (role) q.append('role', role);
     if (status) q.append('status', status);
     const qs = q.toString();
     return await apiCall(`/admin/users${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
+  getUserProfile: async (token, userId) => {
+    return await apiCall(`/admin/users/${userId}`, 'GET', null, token);
+  },
+  suspendUser: async (token, userId, reason) => {
+    return await apiCall(`/admin/users/${userId}/suspend`, 'POST', { reason }, token);
+  },
+  activateUser: async (token, userId) => {
+    return await apiCall(`/admin/users/${userId}/activate`, 'POST', {}, token);
+  },
+  // AD-2: Order Monitoring
+  getAllOrders: async (token, filters = {}) => {
+    const q = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) q.append(key, filters[key]);
+    });
+    const qs = q.toString();
+    return await apiCall(`/admin/orders${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
+  getOrderDetails: async (token, orderId) => {
+    return await apiCall(`/admin/orders/${orderId}`, 'GET', null, token);
+  },
+  // AD-6: Analytics
+  getAnalytics: async (token, startDate = null, endDate = null) => {
+    const q = new URLSearchParams();
+    if (startDate) q.append('startDate', startDate);
+    if (endDate) q.append('endDate', endDate);
+    const qs = q.toString();
+    return await apiCall(`/admin/analytics${qs ? `?${qs}` : ''}`, 'GET', null, token);
   },
 };
 

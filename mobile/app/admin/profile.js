@@ -1,72 +1,105 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authAPI } from "../../services/api";
 
 export default function AdminProfileScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
 
-  const profileMenuItems = [
-    {
-      title: "Account Settings",
-      icon: "⚙️",
-      onPress: () => console.log("Account Settings"),
-    },
-    {
-      title: "Notifications",
-      icon: "🔔",
-      onPress: () => console.log("Notifications"),
-    },
-    {
-      title: "Help & Support",
-      icon: "❓",
-      onPress: () => console.log("Help & Support"),
-    },
-    {
-      title: "About",
-      icon: "ℹ️",
-      onPress: () => console.log("About"),
-    },
-  ];
+  useEffect(() => {
+    loadProfile();
+  }, []);
 
-  const handleLogout = () => {
-    router.replace("/auth/login");
+  const loadProfile = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await authAPI.verify(token);
+      if (res.success && res.user) {
+        setUser(res.user);
+      }
+    } catch (error) {
+      console.error("Load profile error:", error);
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem("authToken");
+      await AsyncStorage.removeItem("userData");
+      router.replace("/auth/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      router.replace("/auth/login");
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#2d5016" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Admin Profile</Text>
-        <Text style={styles.headerSubtitle}>Manage your account</Text>
+        <Text style={styles.headerSubtitle}>Account Information</Text>
       </View>
 
       <ScrollView style={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatar}>👤</Text>
+            <Text style={styles.avatar}>👨‍💼</Text>
           </View>
-          <Text style={styles.name}>Administrator</Text>
-          <Text style={styles.email}>admin@agritrade.com</Text>
-          <Text style={styles.role}>Admin</Text>
+          <Text style={styles.name}>
+            {user?.full_name || user?.email || "Administrator"}
+          </Text>
+          <Text style={styles.email}>{user?.email || user?.phone || "-"}</Text>
+          <View style={styles.roleBadge}>
+            <Text style={styles.roleText}>{user?.role || "ADMIN"}</Text>
+          </View>
         </View>
 
-        <View style={styles.menuSection}>
-          {profileMenuItems.map((item, index) => (
-            <TouchableOpacity
-              key={index}
-              style={styles.menuItem}
-              onPress={item.onPress}
-            >
-              <Text style={styles.menuIcon}>{item.icon}</Text>
-              <Text style={styles.menuTitle}>{item.title}</Text>
-              <Text style={styles.menuArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
+        {/* Account Details */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Account Details</Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Email:</Text>
+            <Text style={styles.detailValue}>{user?.email || "-"}</Text>
+          </View>
+          {user?.phone && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Phone:</Text>
+              <Text style={styles.detailValue}>{user.phone}</Text>
+            </View>
+          )}
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Role:</Text>
+            <Text style={styles.detailValue}>{user?.role || "ADMIN"}</Text>
+          </View>
+          {user?.created_at && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Member Since:</Text>
+              <Text style={styles.detailValue}>
+                {new Date(user.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          )}
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -81,6 +114,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
   header: {
     backgroundColor: "#2d5016",
@@ -135,46 +172,52 @@ const styles = StyleSheet.create({
   email: {
     fontSize: 14,
     color: "#666",
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  role: {
-    fontSize: 12,
-    color: "#2d5016",
-    fontWeight: "600",
+  roleBadge: {
     backgroundColor: "#e8f5e9",
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  menuSection: {
-    marginBottom: 24,
+  roleText: {
+    fontSize: 12,
+    color: "#2d5016",
+    fontWeight: "600",
   },
-  menuItem: {
-    flexDirection: "row",
+  section: {
     backgroundColor: "#fff",
     borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
-    alignItems: "center",
+    marginBottom: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  menuIcon: {
-    fontSize: 24,
-    marginRight: 16,
-  },
-  menuTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: "500",
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
     color: "#333",
+    marginBottom: 16,
   },
-  menuArrow: {
-    fontSize: 24,
-    color: "#999",
+  detailRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: "#666",
+    flex: 1,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "500",
+    flex: 2,
+    textAlign: "right",
   },
   logoutButton: {
     backgroundColor: "#dc3545",
@@ -189,4 +232,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

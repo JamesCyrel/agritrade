@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
+import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { adminAPI } from "../../services/api";
 
 export default function AdminUsersScreen() {
+  const router = useRouter();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -50,7 +52,11 @@ export default function AdminUsersScreen() {
               <Text style={styles.emptyGroup}>No farmers.</Text>
             ) : (
               users.filter(u => u.role === 'FARMER').map((user, index) => (
-                <TouchableOpacity key={`F-${user.user_id}-${index}`} style={styles.userCard}>
+                <TouchableOpacity 
+                  key={`F-${user.user_id}-${index}`} 
+                  style={styles.userCard}
+                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
+                >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
                       <Text style={styles.avatar}>🌾</Text>
@@ -100,7 +106,11 @@ export default function AdminUsersScreen() {
               <Text style={styles.emptyGroup}>No consumers.</Text>
             ) : (
               users.filter(u => u.role === 'CONSUMER').map((user, index) => (
-                <TouchableOpacity key={`C-${user.user_id}-${index}`} style={styles.userCard}>
+                <TouchableOpacity 
+                  key={`C-${user.user_id}-${index}`} 
+                  style={styles.userCard}
+                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
+                >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
                       <Text style={styles.avatar}>👤</Text>
@@ -121,7 +131,11 @@ export default function AdminUsersScreen() {
               <Text style={styles.emptyGroup}>No admins.</Text>
             ) : (
               users.filter(u => u.role === 'ADMIN').map((user, index) => (
-                <TouchableOpacity key={`A-${user.user_id}-${index}`} style={styles.userCard}>
+                <TouchableOpacity 
+                  key={`A-${user.user_id}-${index}`} 
+                  style={styles.userCard}
+                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
+                >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
                       <Text style={styles.avatar}>👤</Text>
