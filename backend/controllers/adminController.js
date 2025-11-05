@@ -188,7 +188,7 @@ exports.activateUser = async (req, res) => {
 // AD-2: Get all orders with filters
 exports.getAllOrders = async (req, res) => {
   try {
-    const { status, userId, farmerId, consumerId, startDate, endDate, orderId, limit = 50, offset = 0 } = req.query;
+    const { status, userId, farmerId, consumerId, startDate, endDate, orderId, q, limit = 50, offset = 0 } = req.query;
     
     const params = [];
     const where = [];
@@ -216,8 +216,25 @@ exports.getAllOrders = async (req, res) => {
     }
     
     if (orderId) {
-      params.push(orderId);
-      where.push(`o.order_id = $${paramCount++}`);
+      const isNumeric = /^\d+$/.test(String(orderId));
+      if (isNumeric) {
+        // Match strictly by numeric order_id
+        params.push(parseInt(orderId));
+        where.push(`o.order_id = $${paramCount++}`);
+      } else {
+        // Treat non-numeric as order number search
+        params.push(`%${orderId}%`);
+        // reuse same placeholder for all three fields
+        where.push(`(o.order_number ILIKE $${paramCount} OR pr.farm_name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
+        paramCount++;
+      }
+    }
+
+    // Generic text search (like consumer search style)
+    if (q) {
+      params.push(`%${q}%`);
+      where.push(`(o.order_number ILIKE $${paramCount} OR pr.farm_name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
+      paramCount++;
     }
     
     if (startDate) {

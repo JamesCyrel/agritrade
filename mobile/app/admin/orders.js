@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
-  TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -18,32 +17,24 @@ export default function AdminOrdersScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState([]);
-  const [filters, setFilters] = useState({
-    status: "",
-    orderId: "",
-  });
+  const [selectedStatus, setSelectedStatus] = useState("ALL");
 
   useEffect(() => {
     loadOrders();
   }, []);
 
-  useEffect(() => {
-    // Debounce search - reload when orderId filter changes (but not on initial mount)
-    if (filters.orderId !== undefined) {
-      const timer = setTimeout(() => {
-        loadOrders();
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [filters.orderId]);
+useEffect(() => {
+  loadOrders();
+}, [selectedStatus]);
 
   const loadOrders = async () => {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("authToken");
       const queryFilters = {};
-      if (filters.status) queryFilters.status = filters.status;
-      if (filters.orderId) queryFilters.orderId = filters.orderId;
+      if (selectedStatus && selectedStatus !== "ALL") {
+        queryFilters.status = selectedStatus;
+      }
       
       const res = await adminAPI.getAllOrders(token, queryFilters);
       if (res.success) {
@@ -120,19 +111,34 @@ export default function AdminOrdersScreen() {
         <Text style={styles.headerSubtitle}>View and track all orders</Text>
       </View>
 
-      <View style={styles.filtersContainer}>
-        <TextInput
-          style={styles.filterInput}
-          placeholder="Search by Order ID..."
-          value={filters.orderId}
-          onChangeText={(text) => {
-            setFilters({ ...filters, orderId: text });
-          }}
-          onSubmitEditing={loadOrders}
-        />
-        <TouchableOpacity style={styles.filterButton} onPress={loadOrders}>
-          <Text style={styles.filterButtonText}>Search</Text>
-        </TouchableOpacity>
+      {/* Status Tabs */}
+      <View style={styles.tabsContainer}>
+        {[
+          { label: "All", value: "ALL" },
+          { label: "Pending", value: "PENDING" },
+          { label: "Confirmed", value: "CONFIRMED" },
+          { label: "Out for Delivery", value: "OUT_FOR_DELIVERY" },
+          { label: "Delivered", value: "DELIVERED" },
+          { label: "Cancelled", value: "CANCELLED" },
+        ].map((tab) => (
+          <TouchableOpacity
+            key={tab.value}
+            style={[
+              styles.tabButton,
+              selectedStatus === tab.value && styles.tabButtonActive,
+            ]}
+            onPress={() => setSelectedStatus(tab.value)}
+          >
+            <Text
+              style={[
+                styles.tabButtonText,
+                selectedStatus === tab.value && styles.tabButtonTextActive,
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       <ScrollView
@@ -216,31 +222,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#e0e0e0",
   },
-  filtersContainer: {
+  tabsContainer: {
     flexDirection: "row",
-    padding: 16,
+    flexWrap: "wrap",
     gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: "#fff",
     borderBottomWidth: 1,
     borderBottomColor: "#e0e0e0",
   },
-  filterInput: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 14,
+  tabButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    backgroundColor: "#fff",
   },
-  filterButton: {
-    backgroundColor: "#2d5016",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    justifyContent: "center",
+  tabButtonActive: {
+    borderColor: "#2d5016",
+    backgroundColor: "#e8f5e9",
   },
-  filterButtonText: {
-    color: "#fff",
-    fontWeight: "600",
+  tabButtonText: {
+    fontSize: 12,
+    color: "#666",
+  },
+  tabButtonTextActive: {
+    color: "#2d5016",
+    fontWeight: "700",
   },
   content: {
     flex: 1,
