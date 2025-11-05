@@ -19,6 +19,7 @@ export default function OrderDetailScreen() {
   const orderId = params.orderId;
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     loadOrder();
@@ -72,6 +73,48 @@ export default function OrderDetailScreen() {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const handleCancelOrder = () => {
+    Alert.alert(
+      "Cancel Order",
+      "Are you sure you want to cancel this order? This action cannot be undone.",
+      [
+        {
+          text: "No",
+          style: "cancel",
+        },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setCancelling(true);
+              const token = await AsyncStorage.getItem("authToken");
+              const res = await consumerAPI.cancelOrder(token, orderId);
+              
+              if (res.success) {
+                Alert.alert("Success", "Order cancelled successfully", [
+                  {
+                    text: "OK",
+                    onPress: () => {
+                      router.back();
+                    },
+                  },
+                ]);
+              } else {
+                Alert.alert("Error", res.message || "Failed to cancel order");
+              }
+            } catch (error) {
+              console.error("Cancel order error:", error);
+              Alert.alert("Error", "Failed to cancel order");
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -210,6 +253,29 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>Order Date</Text>
           <Text style={styles.dateText}>{formatDate(order.created_at)}</Text>
         </View>
+
+        {/* Cancel Order Button - Only show for pending orders */}
+        {order.status === "PENDING" && (
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancelOrder}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <Text style={styles.cancelButtonIcon}>❌</Text>
+                  <Text style={styles.cancelButtonText}>Cancel Order</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <Text style={styles.cancelNote}>
+              You can cancel this order as it's still pending confirmation from the farmer.
+            </Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -336,6 +402,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     padding: 16,
     borderRadius: 12,
+  },
+  cancelButton: {
+    backgroundColor: "#f44336",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  cancelButtonIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  cancelNote: {
+    fontSize: 12,
+    color: "#888",
+    textAlign: "center",
+    fontStyle: "italic",
   },
   emptyStateText: { fontSize: 16, color: "#666" },
 });

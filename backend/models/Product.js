@@ -332,6 +332,17 @@ class Product {
     return result.rows[0];
   }
 
+  // Increment inventory (for order cancellation)
+  static async incrementInventory(productId, quantity) {
+    const result = await pool.query(`
+      UPDATE products
+      SET available_quantity = available_quantity + $1, updated_at = CURRENT_TIMESTAMP
+      WHERE product_id = $2
+      RETURNING product_id, available_quantity
+    `, [quantity, productId]);
+    return result.rows[0];
+  }
+
   // Check if farmer is verified
   static async isFarmerVerified(farmerId) {
     const result = await pool.query(`

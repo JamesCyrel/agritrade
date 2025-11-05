@@ -44,6 +44,7 @@ router.delete('/cart', cartController.clearCart);
 router.post('/orders', orderController.createOrder);
 router.get('/orders', orderController.getConsumerOrders);
 router.get('/orders/:orderId', orderController.getOrderDetails);
+router.post('/orders/:orderId/cancel', orderController.cancelOrder);
 router.post('/promo-codes/validate', orderController.validatePromoCode);
 
 // Payment System (PS-1, PS-2)

@@ -233,3 +233,53 @@ exports.validatePromoCode = async (req, res) => {
   }
 };
 
+// Cancel order (Consumer can cancel pending orders)
+exports.cancelOrder = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.userId;
+
+    // Check if order exists and belongs to consumer
+    const order = await Order.getOrderDetails(orderId, userId);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    // Only allow cancellation if order is still pending
+    if (order.status !== 'PENDING') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot cancel order. Current status: ${order.status}. Only pending orders can be cancelled.` 
+      });
+    }
+
+    // Cancel the order
+    const cancelledOrder = await Order.cancelOrderByConsumer(orderId, userId);
+
+    // Send notification to farmer (OM-6)
+    try {
+      await Notification.createNotification(
+        order.farmer_id,
+        'ORDER_CANCELLED',
+        'Order Cancelled by Consumer',
+        `Order ${order.order_number} was cancelled by the consumer.`,
+        order.order_id
+      );
+    } catch (notifError) {
+      console.error('Error sending notification to farmer:', notifError);
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Order cancelled successfully',
+      data: cancelledOrder 
+    });
+  } catch (error) {
+    console.error('cancelOrder error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message || 'Failed to cancel order' 
+    });
+  }
+};
+

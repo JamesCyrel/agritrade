@@ -456,6 +456,57 @@ class Order {
     return result.rows[0];
   }
   
+  // Cancel order by consumer (only if pending)
+  static async cancelOrderByConsumer(orderId, consumerId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Check if order exists, belongs to consumer, and is pending
+      const orderCheck = await client.query(
+        `SELECT * FROM orders 
+         WHERE order_id = $1 AND consumer_id = $2 AND status = 'PENDING'`,
+        [orderId, consumerId]
+      );
+
+      if (orderCheck.rows.length === 0) {
+        throw new Error('Order not found, not yours, or not in pending status');
+      }
+
+      // Get order items to restore inventory
+      const orderItems = await client.query(
+        `SELECT product_id, quantity, sack_size_kg FROM order_items WHERE order_id = $1`,
+        [orderId]
+      );
+
+      // Update status to CANCELLED
+      const result = await client.query(
+        `UPDATE orders 
+         SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP 
+         WHERE order_id = $1 AND consumer_id = $2
+         RETURNING *`,
+        [orderId, consumerId]
+      );
+
+      // Restore inventory for each item (PM-4)
+      const Product = require('./Product');
+      for (const item of orderItems.rows) {
+        const quantityToRestore = item.sack_size_kg 
+          ? parseFloat(item.quantity) * parseFloat(item.sack_size_kg) // Convert sacks to kg
+          : parseFloat(item.quantity); // Already in kg
+        await Product.incrementInventory(item.product_id, quantityToRestore);
+      }
+
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   // Auto-cancel pending orders past 24 hours (OM-3)
   static async autoCancelPendingOrders() {
     const result = await pool.query(
