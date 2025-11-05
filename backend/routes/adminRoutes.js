@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const notificationController = require('../controllers/notificationController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes admin-only
@@ -20,6 +21,10 @@ router.post('/verifications/:userId/reject', adminController.rejectFarmer);
 
 // List users (optional filters: ?role=FARMER&status=PENDING_REVIEW)
 router.get('/users', adminController.listUsers);
+
+// Delivery Fee Settings (OM-7)
+router.get('/delivery-fee-settings', notificationController.getDeliveryFeeSettings);
+router.put('/delivery-fee-settings', notificationController.updateDeliveryFeeSettings);
 
 module.exports = router;
 

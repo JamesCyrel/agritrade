@@ -1,4 +1,6 @@
 const Order = require('../models/Order');
+const Notification = require('../models/Notification');
+const pool = require('../config/database');
 
 // OM-2: Get farmer orders (filtered by status)
 exports.getFarmerOrders = async (req, res) => {
@@ -39,6 +41,20 @@ exports.acceptOrder = async (req, res) => {
     const farmerId = req.user.userId;
     
     const order = await Order.acceptOrder(orderId, farmerId);
+    
+    // Send notification to consumer (OM-6)
+    try {
+      await Notification.createNotification(
+        order.consumer_id,
+        'ORDER_CONFIRMED',
+        'Order Confirmed!',
+        `Your order ${order.order_number} has been confirmed by the farmer.`,
+        order.order_id
+      );
+    } catch (notifError) {
+      console.error('Error sending notification:', notifError);
+    }
+    
     res.json({ 
       success: true, 
       message: 'Order accepted successfully',
@@ -83,6 +99,20 @@ exports.rejectOrder = async (req, res) => {
     }
     
     const order = await Order.rejectOrder(orderId, farmerId, reason, notes);
+    
+    // Send notification to consumer (OM-6)
+    try {
+      await Notification.createNotification(
+        order.consumer_id,
+        'ORDER_CANCELLED',
+        'Order Cancelled',
+        `Your order ${order.order_number} was cancelled by the farmer. Reason: ${reason.replace(/_/g, ' ')}`,
+        order.order_id
+      );
+    } catch (notifError) {
+      console.error('Error sending notification:', notifError);
+    }
+    
     res.json({ 
       success: true, 
       message: 'Order rejected successfully',
@@ -112,6 +142,37 @@ exports.updateOrderStatus = async (req, res) => {
     }
     
     const order = await Order.updateStatus(orderId, farmerId, status);
+    
+    // Send notification to consumer based on status (OM-6)
+    try {
+      let notificationTitle = 'Order Updated';
+      let notificationMessage = `Your order ${order.order_number} status has been updated.`;
+      
+      if (status === 'OUT_FOR_DELIVERY') {
+        notificationTitle = 'Order Out for Delivery!';
+        notificationMessage = `Your order ${order.order_number} is now out for delivery!`;
+        await Notification.createNotification(
+          order.consumer_id,
+          'OUT_FOR_DELIVERY',
+          notificationTitle,
+          notificationMessage,
+          order.order_id
+        );
+      } else if (status === 'DELIVERED') {
+        notificationTitle = 'Order Delivered!';
+        notificationMessage = `Your order ${order.order_number} has been delivered. Please rate your experience!`;
+        await Notification.createNotification(
+          order.consumer_id,
+          'ORDER_DELIVERED',
+          notificationTitle,
+          notificationMessage,
+          order.order_id
+        );
+      }
+    } catch (notifError) {
+      console.error('Error sending notification:', notifError);
+    }
+    
     res.json({ 
       success: true, 
       message: 'Order status updated successfully',

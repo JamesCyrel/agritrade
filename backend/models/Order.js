@@ -465,6 +465,25 @@ class Order {
        AND created_at < CURRENT_TIMESTAMP - INTERVAL '24 hours'
        RETURNING *`
     );
+    
+    // Send notifications for auto-cancelled orders (OM-6)
+    if (result.rows.length > 0) {
+      const Notification = require('./Notification');
+      for (const order of result.rows) {
+        try {
+          await Notification.createNotification(
+            order.consumer_id,
+            'ORDER_CANCELLED',
+            'Order Auto-Cancelled',
+            `Your order ${order.order_number} was cancelled as the farmer did not respond within 24 hours.`,
+            order.order_id
+          );
+        } catch (error) {
+          console.error(`Error sending notification for order ${order.order_id}:`, error);
+        }
+      }
+    }
+    
     return result.rows;
   }
 
@@ -505,11 +524,10 @@ class Order {
     };
   }
 
-  // Calculate delivery fee (OM-7 placeholder - can be enhanced with distance calculation)
-  static calculateDeliveryFee(farmerLat, farmerLng, consumerLat, consumerLng, baseFee = 50) {
-    // For now, return base fee
-    // In the future, this can calculate based on distance
-    return baseFee;
+  // Calculate delivery fee (OM-7) - Now uses Notification model
+  static async calculateDeliveryFee(farmerLat, farmerLng, consumerLat, consumerLng) {
+    const Notification = require('./Notification');
+    return await Notification.calculateDeliveryFee(farmerLat, farmerLng, consumerLat, consumerLng);
   }
 }
 

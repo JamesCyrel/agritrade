@@ -4,6 +4,7 @@ const consumerController = require('../controllers/consumerController');
 const cartController = require('../controllers/cartController');
 const orderController = require('../controllers/orderController');
 const paymentController = require('../controllers/paymentController');
+const notificationController = require('../controllers/notificationController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and CONSUMER role
@@ -49,6 +50,12 @@ router.post('/promo-codes/validate', orderController.validatePromoCode);
 router.post('/payments/process', paymentController.processDigitalPayment);
 router.post('/payments/cod/check-eligibility', paymentController.checkCODEligibility);
 router.post('/payments/cod/process', paymentController.processCODOrder);
+
+// Notifications (OM-6)
+router.get('/notifications', notificationController.getNotifications);
+router.put('/notifications/:notificationId/read', notificationController.markAsRead);
+router.put('/notifications/read-all', notificationController.markAllAsRead);
+router.get('/notifications/unread-count', notificationController.getUnreadCount);
 
 module.exports = router;
 

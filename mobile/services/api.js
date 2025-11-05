@@ -204,6 +204,19 @@ export const consumerAPI = {
   checkCODEligibility: async (token, orderAmount, farmerId = null) => {
     return await apiCall('/consumer/payments/cod/check-eligibility', 'POST', { orderAmount, farmerId }, token);
   },
+  // Notifications (OM-6)
+  getNotifications: async (token, limit = 50) => {
+    return await apiCall(`/consumer/notifications?limit=${limit}`, 'GET', null, token);
+  },
+  markNotificationAsRead: async (token, notificationId) => {
+    return await apiCall(`/consumer/notifications/${notificationId}/read`, 'PUT', null, token);
+  },
+  markAllNotificationsAsRead: async (token) => {
+    return await apiCall('/consumer/notifications/read-all', 'PUT', null, token);
+  },
+  getUnreadCount: async (token) => {
+    return await apiCall('/consumer/notifications/unread-count', 'GET', null, token);
+  },
 };
 
 // Product API calls (Farmer)

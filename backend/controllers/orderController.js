@@ -3,6 +3,8 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Consumer = require('../models/Consumer');
 const Payment = require('../models/Payment');
+const pool = require('../config/database');
+const Notification = require('../models/Notification');
 
 // OC-3: Create order from cart (Checkout)
 exports.createOrder = async (req, res) => {
@@ -76,8 +78,35 @@ exports.createOrder = async (req, res) => {
         }
       }
 
-      // Calculate delivery fee (placeholder - can be enhanced with distance calculation)
-      const deliveryFee = 50; // Base delivery fee
+      // Calculate delivery fee based on distance (OM-7)
+      let deliveryFee = 50; // Default fallback
+      try {
+        // Get farmer location from profile
+        const farmerLocationResult = await pool.query(
+          `SELECT latitude, longitude FROM profiles WHERE user_id = $1`,
+          [parseInt(farmerId)]
+        );
+        
+        // Get consumer delivery address location
+        const addressResult = await pool.query(
+          `SELECT latitude, longitude FROM consumer_addresses WHERE address_id = $1`,
+          [deliveryAddressId]
+        );
+        
+        if (farmerLocationResult.rows[0]?.latitude && addressResult.rows[0]?.latitude) {
+          const Notification = require('../models/Notification');
+          deliveryFee = await Notification.calculateDeliveryFee(
+            farmerLocationResult.rows[0].latitude,
+            farmerLocationResult.rows[0].longitude,
+            addressResult.rows[0].latitude,
+            addressResult.rows[0].longitude
+          );
+        }
+      } catch (error) {
+        console.error('Error calculating delivery fee:', error);
+        // Use default fee on error
+      }
+      
       const tax = (subtotal - discountAmount) * 0.12; // 12% tax (placeholder)
       const totalAmount = subtotal - discountAmount + deliveryFee + tax;
 
