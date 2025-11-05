@@ -87,6 +87,12 @@ export default function ConsumerLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="orders/[orderId]/review"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

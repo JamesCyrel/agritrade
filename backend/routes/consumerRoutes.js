@@ -5,6 +5,7 @@ const cartController = require('../controllers/cartController');
 const orderController = require('../controllers/orderController');
 const paymentController = require('../controllers/paymentController');
 const notificationController = require('../controllers/notificationController');
+const reviewController = require('../controllers/reviewController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and CONSUMER role
@@ -57,6 +58,13 @@ router.get('/notifications', notificationController.getNotifications);
 router.put('/notifications/:notificationId/read', notificationController.markAsRead);
 router.put('/notifications/read-all', notificationController.markAllAsRead);
 router.get('/notifications/unread-count', notificationController.getUnreadCount);
+
+// Reviews & Ratings (RR-1, RR-2)
+router.post('/orders/:orderId/review', reviewController.createReview);
+router.get('/orders/:orderId/review', reviewController.checkOrderReview);
+router.get('/farmers/:farmerId/reviews', reviewController.getFarmerReviews);
+router.get('/farmers/:farmerId/rating', reviewController.getFarmerAverageRating);
+router.get('/products/:productId/reviews', reviewController.getProductReviews);
 
 module.exports = router;
 

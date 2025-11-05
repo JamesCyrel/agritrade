@@ -669,9 +669,8 @@ class Product {
         pr.latitude,
         pr.longitude,
         pr.verification_status,
-        -- Placeholder for ratings
-        0 as average_rating,
-        0 as total_reviews
+        (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE farmer_id = pr.user_id) as average_rating,
+        (SELECT COUNT(*) FROM reviews WHERE farmer_id = pr.user_id) as total_reviews
       FROM profiles pr
       WHERE pr.user_id = $1
         AND pr.verification_status = 'APPROVED'

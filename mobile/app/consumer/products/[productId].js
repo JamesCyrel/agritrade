@@ -169,14 +169,23 @@ export default function ProductDetailScreen() {
               }
             }}
           >
-            <Text style={styles.farmerName}>{product.farm_name || product.farmer_name}</Text>
+            <View style={styles.farmerHeader}>
+              <Text style={styles.farmerName}>{product.farm_name || product.farmer_name}</Text>
+              {product.average_rating > 0 && (
+                <View style={styles.ratingContainer}>
+                  <Text style={styles.ratingStars}>
+                    {Array.from({ length: 5 }, (_, i) => 
+                      i < Math.round(product.average_rating) ? "⭐" : "☆"
+                    ).join("")}
+                  </Text>
+                  <Text style={styles.ratingText}>
+                    {parseFloat(product.average_rating).toFixed(1)} ({product.total_reviews || 0} reviews)
+                  </Text>
+                </View>
+              )}
+            </View>
             {product.farmer_address && (
               <Text style={styles.farmerAddress}>📍 {product.farmer_address}</Text>
-            )}
-            {product.average_rating > 0 && (
-              <Text style={styles.farmerRating}>
-                ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews} reviews)
-              </Text>
             )}
             <Text style={styles.viewStorefront}>View Storefront →</Text>
           </TouchableOpacity>
@@ -345,7 +354,26 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
   },
-  farmerName: { fontSize: 18, fontWeight: "600", color: "#333", marginBottom: 8 },
+  farmerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  farmerName: { fontSize: 18, fontWeight: "600", color: "#333", flex: 1 },
+  ratingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 12,
+  },
+  ratingStars: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  ratingText: {
+    fontSize: 12,
+    color: "#666",
+  },
   farmerAddress: { fontSize: 14, color: "#666", marginBottom: 8 },
   farmerRating: { fontSize: 14, color: "#666", marginBottom: 8 },
   viewStorefront: { fontSize: 14, color: "#2d5016", fontWeight: "600" },

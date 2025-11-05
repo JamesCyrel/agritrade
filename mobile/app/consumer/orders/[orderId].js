@@ -9,7 +9,7 @@ import {
   Alert,
   Image,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../../services/api";
 
@@ -20,10 +20,20 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [order, setOrder] = useState(null);
   const [cancelling, setCancelling] = useState(false);
+  const [hasReviewed, setHasReviewed] = useState(false);
+  const [reviewData, setReviewData] = useState(null);
 
   useEffect(() => {
     loadOrder();
   }, [orderId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (order && order.status === "DELIVERED") {
+        checkReviewStatus();
+      }
+    }, [order])
+  );
 
   const loadOrder = async () => {
     try {
@@ -42,6 +52,19 @@ export default function OrderDetailScreen() {
       router.back();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkReviewStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.checkOrderReview(token, orderId);
+      if (res.success) {
+        setHasReviewed(res.data.hasReviewed);
+        setReviewData(res.data.review);
+      }
+    } catch (error) {
+      console.error("Check review status error:", error);
     }
   };
 
@@ -276,6 +299,52 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
         )}
+
+        {/* Review Prompt - Only show for delivered orders */}
+        {order.status === "DELIVERED" && (
+          <View style={styles.section}>
+            {hasReviewed ? (
+              <View style={styles.reviewSubmittedCard}>
+                <Text style={styles.reviewSubmittedIcon}>⭐</Text>
+                <Text style={styles.reviewSubmittedText}>Thank you for your review!</Text>
+                {reviewData && (
+                  <View style={styles.reviewDisplay}>
+                    <View style={styles.reviewStars}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Text key={star} style={styles.reviewStar}>
+                          {star <= reviewData.rating ? "⭐" : "☆"}
+                        </Text>
+                      ))}
+                    </View>
+                    {reviewData.comment && (
+                      <Text style={styles.reviewComment}>{reviewData.comment}</Text>
+                    )}
+                  </View>
+                )}
+                <TouchableOpacity
+                  style={styles.editReviewButton}
+                  onPress={() => router.push(`/consumer/orders/${orderId}/review`)}
+                >
+                  <Text style={styles.editReviewButtonText}>Edit Review</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.reviewPromptCard}>
+                <Text style={styles.reviewPromptIcon}>⭐</Text>
+                <Text style={styles.reviewPromptTitle}>Rate Your Experience</Text>
+                <Text style={styles.reviewPromptText}>
+                  How was your order? Help other customers by sharing your experience!
+                </Text>
+                <TouchableOpacity
+                  style={styles.reviewButton}
+                  onPress={() => router.push(`/consumer/orders/${orderId}/review`)}
+                >
+                  <Text style={styles.reviewButtonText}>Leave a Review</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -426,6 +495,92 @@ const styles = StyleSheet.create({
     color: "#888",
     textAlign: "center",
     fontStyle: "italic",
+  },
+  reviewPromptCard: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#2d5016",
+    borderStyle: "dashed",
+  },
+  reviewPromptIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  reviewPromptTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#333",
+    marginBottom: 8,
+  },
+  reviewPromptText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  reviewButton: {
+    backgroundColor: "#2d5016",
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  reviewButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#fff",
+  },
+  reviewSubmittedCard: {
+    backgroundColor: "#e8f5e9",
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#4caf50",
+  },
+  reviewSubmittedIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  reviewSubmittedText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#2d5016",
+    marginBottom: 12,
+  },
+  reviewDisplay: {
+    width: "100%",
+    marginBottom: 12,
+  },
+  reviewStars: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  reviewStar: {
+    fontSize: 20,
+    marginHorizontal: 2,
+  },
+  reviewComment: {
+    fontSize: 14,
+    color: "#555",
+    textAlign: "center",
+    fontStyle: "italic",
+    paddingHorizontal: 16,
+  },
+  editReviewButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  editReviewButtonText: {
+    fontSize: 14,
+    color: "#2d5016",
+    fontWeight: "600",
+    textDecorationLine: "underline",
   },
   emptyStateText: { fontSize: 16, color: "#666" },
 });

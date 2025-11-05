@@ -214,6 +214,12 @@ exports.getProductDetails = async (req, res) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
+    
+    // Get product reviews (RR-2)
+    const Review = require('../models/Review');
+    const reviews = await Review.getProductReviews(parseInt(productId), 10, 0);
+    product.reviews = reviews;
+    
     res.json({ success: true, data: product });
   } catch (error) {
     console.error('getProductDetails error:', error);
@@ -233,6 +239,12 @@ exports.getFarmerStorefront = async (req, res) => {
     if (!storefront) {
       return res.status(404).json({ success: false, message: 'Farmer not found or not verified' });
     }
+    
+    // Get farmer reviews (RR-2)
+    const Review = require('../models/Review');
+    const reviews = await Review.getFarmerReviews(parsedFarmerId, 10, 0);
+    storefront.reviews = reviews;
+    
     res.json({ success: true, data: storefront });
   } catch (error) {
     console.error('getFarmerStorefront error:', error);

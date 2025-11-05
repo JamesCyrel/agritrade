@@ -3,6 +3,7 @@ const router = express.Router();
 const farmerController = require('../controllers/farmerController');
 const paymentController = require('../controllers/paymentController');
 const farmerOrderController = require('../controllers/farmerOrderController');
+const farmerReviewController = require('../controllers/farmerReviewController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and FARMER role
@@ -33,6 +34,9 @@ router.get('/orders/:orderId', farmerOrderController.getFarmerOrderDetails);
 router.post('/orders/:orderId/accept', farmerOrderController.acceptOrder);
 router.post('/orders/:orderId/reject', farmerOrderController.rejectOrder);
 router.put('/orders/:orderId/status', farmerOrderController.updateOrderStatus);
+
+// Reviews & Ratings (RR-3)
+router.get('/reviews', farmerReviewController.getFarmerReviews);
 
 module.exports = router;
 

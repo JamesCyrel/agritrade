@@ -220,6 +220,22 @@ export const consumerAPI = {
   getUnreadCount: async (token) => {
     return await apiCall('/consumer/notifications/unread-count', 'GET', null, token);
   },
+  // Reviews & Ratings (RR-1, RR-2)
+  createReview: async (token, orderId, rating, comment, productId = null) => {
+    return await apiCall(`/consumer/orders/${orderId}/review`, 'POST', { rating, comment, productId }, token);
+  },
+  checkOrderReview: async (token, orderId) => {
+    return await apiCall(`/consumer/orders/${orderId}/review`, 'GET', null, token);
+  },
+  getFarmerReviews: async (token, farmerId, limit = 20, offset = 0) => {
+    return await apiCall(`/consumer/farmers/${farmerId}/reviews?limit=${limit}&offset=${offset}`, 'GET', null, token);
+  },
+  getFarmerRating: async (token, farmerId) => {
+    return await apiCall(`/consumer/farmers/${farmerId}/rating`, 'GET', null, token);
+  },
+  getProductReviews: async (token, productId, limit = 20, offset = 0) => {
+    return await apiCall(`/consumer/products/${productId}/reviews?limit=${limit}&offset=${offset}`, 'GET', null, token);
+  },
 };
 
 // Product API calls (Farmer)
@@ -271,6 +287,14 @@ export const farmerOrderAPI = {
   // OM-4: Update order status
   updateOrderStatus: async (token, orderId, status) => {
     return await apiCall(`/farmer/orders/${orderId}/status`, 'PUT', { status }, token);
+  },
+};
+
+// Reviews & Ratings API calls (Farmer)
+export const farmerReviewAPI = {
+  // RR-3: Get farmer reviews
+  getReviews: async (token, limit = 50, offset = 0) => {
+    return await apiCall(`/farmer/reviews?limit=${limit}&offset=${offset}`, 'GET', null, token);
   },
 };
 

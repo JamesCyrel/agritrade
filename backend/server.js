@@ -10,6 +10,7 @@ const Cart = require('./models/Cart');
 const Order = require('./models/Order');
 const Payment = require('./models/Payment');
 const Notification = require('./models/Notification');
+const Review = require('./models/Review');
 const authRoutes = require('./routes/authRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -50,6 +51,7 @@ const initializeDatabase = async () => {
     await Order.createTable();
     await Payment.createTable();
     await Notification.createTable();
+    await Review.createTable();
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
