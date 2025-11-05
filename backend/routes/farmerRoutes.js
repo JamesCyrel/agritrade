@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const farmerController = require('../controllers/farmerController');
 const paymentController = require('../controllers/paymentController');
+const farmerOrderController = require('../controllers/farmerOrderController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and FARMER role
@@ -25,6 +26,13 @@ router.put('/cod/settings', paymentController.updateCODSettings);
 router.post('/payments/cod/confirm', paymentController.confirmCODPayment);
 router.get('/ledger', paymentController.getFarmerLedger);
 router.get('/payouts', paymentController.getFarmerPayouts);
+
+// Order Management (OM-2, OM-3, OM-4)
+router.get('/orders', farmerOrderController.getFarmerOrders);
+router.get('/orders/:orderId', farmerOrderController.getFarmerOrderDetails);
+router.post('/orders/:orderId/accept', farmerOrderController.acceptOrder);
+router.post('/orders/:orderId/reject', farmerOrderController.rejectOrder);
+router.put('/orders/:orderId/status', farmerOrderController.updateOrderStatus);
 
 module.exports = router;
 

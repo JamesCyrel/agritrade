@@ -53,10 +53,19 @@ class Order {
 
       CREATE INDEX IF NOT EXISTS idx_orders_consumer_id ON orders(consumer_id);
       CREATE INDEX IF NOT EXISTS idx_orders_farmer_id ON orders(farmer_id);
+      CREATE TABLE IF NOT EXISTS order_rejections (
+        rejection_id SERIAL PRIMARY KEY,
+        order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
+        reason VARCHAR(100) NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
       CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
       CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
       CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
+      CREATE INDEX IF NOT EXISTS idx_order_rejections_order_id ON order_rejections(order_id);
     `;
 
     // Add payment_type column if it doesn't exist (for existing tables)
@@ -248,26 +257,195 @@ class Order {
     return order;
   }
 
-  // Get orders for farmer
-  static async getFarmerOrders(farmerId) {
+  // Get orders for farmer (OM-2)
+  static async getFarmerOrders(farmerId, status = null) {
+    let query = `
+      SELECT 
+        o.*,
+        u.email as consumer_email,
+        u.phone as consumer_phone,
+        ca.full_address as delivery_address,
+        ca.city,
+        ca.state,
+        ca.postal_code,
+        json_agg(
+          json_build_object(
+            'order_item_id', oi.order_item_id,
+            'product_id', oi.product_id,
+            'product_name', p.variety_name,
+            'quantity', oi.quantity,
+            'unit_price', oi.unit_price,
+            'sack_size_kg', oi.sack_size_kg,
+            'subtotal', oi.subtotal
+          )
+        ) FILTER (WHERE oi.order_item_id IS NOT NULL) as items
+      FROM orders o
+      INNER JOIN users u ON o.consumer_id = u.user_id
+      LEFT JOIN consumer_addresses ca ON o.delivery_address_id = ca.address_id
+      LEFT JOIN order_items oi ON o.order_id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.product_id
+      WHERE o.farmer_id = $1
+    `;
+    const params = [farmerId];
+    
+    if (status) {
+      query += ` AND o.status = $2`;
+      params.push(status);
+    }
+    
+    query += ` GROUP BY o.order_id, u.email, u.phone, ca.full_address, ca.city, ca.state, ca.postal_code
+      ORDER BY o.created_at DESC
+    `;
+    
+    const result = await pool.query(query, params);
+    return result.rows;
+  }
+  
+  // Get order details for farmer (OM-2)
+  static async getFarmerOrderDetails(orderId, farmerId) {
     const query = `
       SELECT 
         o.*,
         u.email as consumer_email,
         u.phone as consumer_phone,
-        ca.full_address as delivery_address
+        ca.full_address as delivery_address,
+        ca.city,
+        ca.state,
+        ca.postal_code,
+        json_agg(
+          json_build_object(
+            'order_item_id', oi.order_item_id,
+            'product_id', oi.product_id,
+            'product_name', p.variety_name,
+            'quantity', oi.quantity,
+            'unit_price', oi.unit_price,
+            'sack_size_kg', oi.sack_size_kg,
+            'subtotal', oi.subtotal
+          )
+        ) FILTER (WHERE oi.order_item_id IS NOT NULL) as items
       FROM orders o
       INNER JOIN users u ON o.consumer_id = u.user_id
       LEFT JOIN consumer_addresses ca ON o.delivery_address_id = ca.address_id
-      WHERE o.farmer_id = $1
-      ORDER BY o.created_at DESC
+      LEFT JOIN order_items oi ON o.order_id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.product_id
+      WHERE o.order_id = $1 AND o.farmer_id = $2
+      GROUP BY o.order_id, u.email, u.phone, ca.full_address, ca.city, ca.state, ca.postal_code
     `;
-    const result = await pool.query(query, [farmerId]);
-    return result.rows;
+    const result = await pool.query(query, [orderId, farmerId]);
+    return result.rows[0] || null;
   }
 
-  // Update order status (for farmer)
+  // Accept order (OM-3)
+  static async acceptOrder(orderId, farmerId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Check if order is still pending and within timeframe (24 hours)
+      const orderCheck = await client.query(
+        `SELECT * FROM orders 
+         WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'
+         AND created_at > CURRENT_TIMESTAMP - INTERVAL '24 hours'`,
+        [orderId, farmerId]
+      );
+      
+      if (orderCheck.rows.length === 0) {
+        throw new Error('Order not found, not pending, or past acceptance timeframe');
+      }
+      
+      // Update status to CONFIRMED
+      const result = await client.query(
+        `UPDATE orders 
+         SET status = 'CONFIRMED', updated_at = CURRENT_TIMESTAMP 
+         WHERE order_id = $1 AND farmer_id = $2
+         RETURNING *`,
+        [orderId, farmerId]
+      );
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  
+  // Reject order (OM-3)
+  static async rejectOrder(orderId, farmerId, reason, notes = null) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Check if order is still pending
+      const orderCheck = await client.query(
+        `SELECT * FROM orders 
+         WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'`,
+        [orderId, farmerId]
+      );
+      
+      if (orderCheck.rows.length === 0) {
+        throw new Error('Order not found or not in pending status');
+      }
+      
+      // Record rejection
+      await client.query(
+        `INSERT INTO order_rejections (order_id, reason, notes)
+         VALUES ($1, $2, $3)`,
+        [orderId, reason, notes]
+      );
+      
+      // Update status to CANCELLED
+      const result = await client.query(
+        `UPDATE orders 
+         SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP 
+         WHERE order_id = $1 AND farmer_id = $2
+         RETURNING *`,
+        [orderId, farmerId]
+      );
+      
+      await client.query('COMMIT');
+      return result.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  
+  // Update order status (OM-4)
   static async updateStatus(orderId, farmerId, status) {
+    // Validate status transition
+    const validStatuses = ['CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED'];
+    if (!validStatuses.includes(status)) {
+      throw new Error('Invalid status for this operation');
+    }
+    
+    // Check current status and validate transition
+    const currentOrder = await pool.query(
+      `SELECT status FROM orders WHERE order_id = $1 AND farmer_id = $2`,
+      [orderId, farmerId]
+    );
+    
+    if (currentOrder.rows.length === 0) {
+      throw new Error('Order not found');
+    }
+    
+    const currentStatus = currentOrder.rows[0].status;
+    
+    // Validate status transition
+    const validTransitions = {
+      'CONFIRMED': ['PREPARING', 'OUT_FOR_DELIVERY'],
+      'PREPARING': ['OUT_FOR_DELIVERY'],
+      'OUT_FOR_DELIVERY': ['DELIVERED']
+    };
+    
+    if (validTransitions[currentStatus] && !validTransitions[currentStatus].includes(status)) {
+      throw new Error(`Cannot transition from ${currentStatus} to ${status}`);
+    }
+    
     const result = await pool.query(
       `UPDATE orders 
        SET status = $1, updated_at = CURRENT_TIMESTAMP 
@@ -276,6 +454,18 @@ class Order {
       [status, orderId, farmerId]
     );
     return result.rows[0];
+  }
+  
+  // Auto-cancel pending orders past 24 hours (OM-3)
+  static async autoCancelPendingOrders() {
+    const result = await pool.query(
+      `UPDATE orders 
+       SET status = 'CANCELLED', updated_at = CURRENT_TIMESTAMP 
+       WHERE status = 'PENDING' 
+       AND created_at < CURRENT_TIMESTAMP - INTERVAL '24 hours'
+       RETURNING *`
+    );
+    return result.rows;
   }
 
   // Validate and apply promo code (OC-4)

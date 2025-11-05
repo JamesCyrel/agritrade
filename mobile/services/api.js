@@ -235,3 +235,26 @@ export const productAPI = {
   },
 };
 
+// Order Management API calls (Farmer)
+export const farmerOrderAPI = {
+  // OM-2: Get farmer orders
+  getOrders: async (token, status = null) => {
+    const query = status ? `?status=${status}` : '';
+    return await apiCall(`/farmer/orders${query}`, 'GET', null, token);
+  },
+  getOrderDetails: async (token, orderId) => {
+    return await apiCall(`/farmer/orders/${orderId}`, 'GET', null, token);
+  },
+  // OM-3: Accept/Reject orders
+  acceptOrder: async (token, orderId) => {
+    return await apiCall(`/farmer/orders/${orderId}/accept`, 'POST', null, token);
+  },
+  rejectOrder: async (token, orderId, reason, notes = null) => {
+    return await apiCall(`/farmer/orders/${orderId}/reject`, 'POST', { reason, notes }, token);
+  },
+  // OM-4: Update order status
+  updateOrderStatus: async (token, orderId, status) => {
+    return await apiCall(`/farmer/orders/${orderId}/status`, 'PUT', { status }, token);
+  },
+};
+
