@@ -7,8 +7,15 @@ import {
   StyleSheet,
   Alert,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { supabase } from "../../lib/supabase"; // <-- Import path fixed
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
+import { GOOGLE_CLIENT_ID } from "../../lib/authProviders";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -17,10 +24,37 @@ export default function SignupScreen() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("CONSUMER");
-
-  const handleSignup = () => {
-    if (!email && !phone) {
-      Alert.alert("Error", "Please provide either email or phone number");
+  const [loading, setLoading] = useState(false);
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: GOOGLE_CLIENT_ID,
+  });
+  
+  useEffect(() => {
+    const signUpWithGoogle = async () => {
+      if (response?.type === "success") {
+        const { authentication } = response;
+        const { accessToken } = authentication;
+  
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: "google",
+          token: accessToken,
+        });
+  
+        if (error) {
+          Alert.alert("Google Sign-Up Error", error.message);
+        } else {
+          // Successfully signed up/logged in
+          router.replace("/(tabs)/home"); // navigate to main app screen
+        }
+      }
+    };
+  
+    signUpWithGoogle();
+  }, [response]);
+  
+  const handleSignup = async () => {
+    if (!email) { // Email is required by Supabase auth
+      Alert.alert("Error", "Please provide an email address");
       return;
     }
 
@@ -34,25 +68,50 @@ export default function SignupScreen() {
       return;
     }
 
-    // Static navigation - for demo purposes
-    Alert.alert("Signup", "Signup functionality will be implemented later");
-    
-    // Navigate to appropriate home based on role
-    if (selectedRole === "ADMIN") {
-      router.push("/admin/home");
-    } else if (selectedRole === "FARMER") {
-      router.push("/farmer/home");
-    } else {
-      router.push("/consumer/home");
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email,
+        password: password,
+        phone: phone || undefined,
+        options: {
+          data: {
+            role: selectedRole,
+            // You can add full_name here if you collect it
+          },
+        },
+      });
+
+      if (error) {
+        Alert.alert("Signup Failed", error.message);
+      } else if (data.session) {
+        // This handles "Confirm email" being OFF
+        // Navigation will be handled by AuthProvider
+      } else if (data.user) {
+        // This handles "Confirm email" being ON
+        Alert.alert(
+          "Signup Successful",
+          "Please check your email to confirm your account."
+        );
+        router.replace("/(auth)/login"); // Send them to login after
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        Alert.alert("Signup Error", error.message);
+      }
     }
+    setLoading(false);
   };
 
   const navigateToLogin = () => {
-    router.push("/auth/login");
+    router.replace("/(auth)/login"); // Use replace to avoid back button issues
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join AgriTrade today</Text>
@@ -123,7 +182,7 @@ export default function SignupScreen() {
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>Phone Number</Text>
+        <Text style={styles.label}>Phone Number (Optional)</Text>
         <TextInput
           style={styles.input}
           placeholder="Enter your phone number"
@@ -150,8 +209,16 @@ export default function SignupScreen() {
           secureTextEntry
         />
 
-        <TouchableOpacity style={styles.signupButton} onPress={handleSignup}>
-          <Text style={styles.signupButtonText}>Sign Up</Text>
+        <TouchableOpacity
+          style={styles.signupButton}
+          onPress={handleSignup}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.signupButtonText}>Sign Up</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.divider}>
@@ -160,7 +227,11 @@ export default function SignupScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton}>
+        <TouchableOpacity
+          style={styles.socialButton}
+          disabled={!request}
+          onPress={() => promptAsync()}
+        >
           <Text style={styles.socialButtonText}>Sign up with Google</Text>
         </TouchableOpacity>
 
@@ -187,6 +258,8 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingTop: 40,
+    justifyContent: 'center',
+    minHeight: '100%'
   },
   header: {
     alignItems: "center",

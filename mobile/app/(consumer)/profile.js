@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { supabase } from "../../lib/supabase";
 
 export default function ConsumerProfileScreen() {
   const router = useRouter();
@@ -44,9 +45,18 @@ export default function ConsumerProfileScreen() {
     },
   ];
 
-  const handleLogout = () => {
-    router.replace("/auth/login");
+  const handleLogout = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+  
+      // After successful signout, navigate to login screen
+      router.replace("/(auth)/login");
+    } catch (error) {
+      console.error("Logout failed:", error.message);
+    }
   };
+  
 
   return (
     <View style={styles.container}>
