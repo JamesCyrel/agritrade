@@ -5,10 +5,12 @@ require('dotenv').config();
 const pool = require('./config/database');
 const User = require('./models/User');
 const Consumer = require('./models/Consumer');
+const Product = require('./models/Product');
 const authRoutes = require('./routes/authRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const consumerRoutes = require('./routes/consumerRoutes');
+const productRoutes = require('./routes/productRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -30,6 +32,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/farmer', farmerRoutes);
+app.use('/api/farmer', productRoutes); // Product routes under /api/farmer
 app.use('/api/admin', adminRoutes);
 app.use('/api/consumer', consumerRoutes);
 
@@ -38,6 +41,7 @@ const initializeDatabase = async () => {
   try {
     await User.createTable();
     await Consumer.createTables();
+    await Product.createTable();
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
@@ -65,6 +69,14 @@ const startServer = async () => {
       console.log(`   PUT  /api/farmer/profile`);
       console.log(`   POST /api/farmer/verification/documents`);
       console.log(`   GET  /api/farmer/verification/status`);
+      console.log(`   POST /api/farmer/products`);
+      console.log(`   GET  /api/farmer/products`);
+      console.log(`   GET  /api/farmer/products/:productId`);
+      console.log(`   PUT  /api/farmer/products/:productId`);
+      console.log(`   POST /api/farmer/products/:productId/archive`);
+      console.log(`   GET  /api/farmer/products/archived/list`);
+      console.log(`   POST /api/farmer/products/:productId/unarchive`);
+      console.log(`   PUT  /api/farmer/products/:productId/inventory`);
       console.log(`\n🛡️ Admin endpoints:`);
       console.log(`   GET  /api/admin/verifications/pending`);
       console.log(`   GET  /api/admin/verifications/:userId`);

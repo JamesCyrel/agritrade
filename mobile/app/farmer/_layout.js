@@ -43,6 +43,13 @@ export default function FarmerLayout() {
         }}
       />
       <Tabs.Screen
+        name="archive"
+        options={{
+          title: "Archive",
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🗄️</Text>,
+        }}
+      />
+      <Tabs.Screen
         name="earnings"
         options={{
           title: "Earnings",
@@ -61,6 +68,25 @@ export default function FarmerLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
+        }}
+      />
+      {/* Hide these screens from tab bar - they're not tabs but accessible via navigation */}
+      <Tabs.Screen
+        name="profile-setup"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="products/create"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="products/inventory"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

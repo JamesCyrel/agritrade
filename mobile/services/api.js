@@ -147,3 +147,32 @@ export const consumerAPI = {
   },
 };
 
+// Product API calls (Farmer)
+export const productAPI = {
+  createProduct: async (token, product) => {
+    return await apiCall('/farmer/products', 'POST', product, token);
+  },
+  getProducts: async (token, includeInactive = false) => {
+    const query = includeInactive ? '?includeInactive=true' : '';
+    return await apiCall(`/farmer/products${query}`, 'GET', null, token);
+  },
+  getProduct: async (token, productId) => {
+    return await apiCall(`/farmer/products/${productId}`, 'GET', null, token);
+  },
+  updateProduct: async (token, productId, product) => {
+    return await apiCall(`/farmer/products/${productId}`, 'PUT', product, token);
+  },
+  archiveProduct: async (token, productId) => {
+    return await apiCall(`/farmer/products/${productId}/archive`, 'POST', null, token);
+  },
+  getArchivedProducts: async (token) => {
+    return await apiCall('/farmer/products/archived/list', 'GET', null, token);
+  },
+  unarchiveProduct: async (token, productId) => {
+    return await apiCall(`/farmer/products/${productId}/unarchive`, 'POST', null, token);
+  },
+  updateInventory: async (token, productId, available_quantity) => {
+    return await apiCall(`/farmer/products/${productId}/inventory`, 'PUT', { available_quantity }, token);
+  },
+};
+
