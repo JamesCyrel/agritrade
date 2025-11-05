@@ -75,6 +75,18 @@ export default function ConsumerLayout() {
           href: null, // Hide from tab bar
         }}
       />
+      <Tabs.Screen
+        name="checkout"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
+      <Tabs.Screen
+        name="orders/[orderId]"
+        options={{
+          href: null, // Hide from tab bar
+        }}
+      />
     </Tabs>
   );
 }

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const consumerController = require('../controllers/consumerController');
+const cartController = require('../controllers/cartController');
+const orderController = require('../controllers/orderController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and CONSUMER role
@@ -28,6 +30,19 @@ router.get('/homepage', consumerController.getHomepage);
 router.get('/products/search', consumerController.searchProducts);
 router.get('/products/:productId', consumerController.getProductDetails);
 router.get('/farmers/:farmerId/storefront', consumerController.getFarmerStorefront);
+
+// Cart (OC-1, OC-2)
+router.post('/cart', cartController.addToCart);
+router.get('/cart', cartController.getCart);
+router.put('/cart/:cartItemId', cartController.updateCartItem);
+router.delete('/cart/:cartItemId', cartController.removeCartItem);
+router.delete('/cart', cartController.clearCart);
+
+// Orders & Checkout (OC-3, OC-4)
+router.post('/orders', orderController.createOrder);
+router.get('/orders', orderController.getConsumerOrders);
+router.get('/orders/:orderId', orderController.getOrderDetails);
+router.post('/promo-codes/validate', orderController.validatePromoCode);
 
 module.exports = router;
 

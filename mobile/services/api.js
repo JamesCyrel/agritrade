@@ -171,6 +171,35 @@ export const consumerAPI = {
   getFarmerStorefront: async (token, farmerId) => {
     return await apiCall(`/consumer/farmers/${farmerId}/storefront`, 'GET', null, token);
   },
+  // Cart (OC-1, OC-2)
+  addToCart: async (token, cartData) => {
+    return await apiCall('/consumer/cart', 'POST', cartData, token);
+  },
+  getCart: async (token) => {
+    return await apiCall('/consumer/cart', 'GET', null, token);
+  },
+  updateCartItem: async (token, cartItemId, quantity) => {
+    return await apiCall(`/consumer/cart/${cartItemId}`, 'PUT', { quantity }, token);
+  },
+  removeCartItem: async (token, cartItemId) => {
+    return await apiCall(`/consumer/cart/${cartItemId}`, 'DELETE', null, token);
+  },
+  clearCart: async (token) => {
+    return await apiCall('/consumer/cart', 'DELETE', null, token);
+  },
+  // Orders & Checkout (OC-3, OC-4)
+  createOrder: async (token, orderData) => {
+    return await apiCall('/consumer/orders', 'POST', orderData, token);
+  },
+  getOrders: async (token) => {
+    return await apiCall('/consumer/orders', 'GET', null, token);
+  },
+  getOrderDetails: async (token, orderId) => {
+    return await apiCall(`/consumer/orders/${orderId}`, 'GET', null, token);
+  },
+  validatePromoCode: async (token, code, orderAmount) => {
+    return await apiCall('/consumer/promo-codes/validate', 'POST', { code, orderAmount }, token);
+  },
 };
 
 // Product API calls (Farmer)

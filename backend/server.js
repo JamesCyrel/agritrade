@@ -6,6 +6,8 @@ const pool = require('./config/database');
 const User = require('./models/User');
 const Consumer = require('./models/Consumer');
 const Product = require('./models/Product');
+const Cart = require('./models/Cart');
+const Order = require('./models/Order');
 const authRoutes = require('./routes/authRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
 const adminRoutes = require('./routes/adminRoutes');
@@ -42,6 +44,8 @@ const initializeDatabase = async () => {
     await User.createTable();
     await Consumer.createTables();
     await Product.createTable();
+    await Cart.createTable();
+    await Order.createTable();
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
@@ -98,6 +102,16 @@ const startServer = async () => {
       console.log(`   GET  /api/consumer/products/search`);
       console.log(`   GET  /api/consumer/products/:productId`);
       console.log(`   GET  /api/consumer/farmers/:farmerId/storefront`);
+      console.log(`\n🛒 Cart & Orders endpoints:`);
+      console.log(`   POST /api/consumer/cart`);
+      console.log(`   GET  /api/consumer/cart`);
+      console.log(`   PUT  /api/consumer/cart/:cartItemId`);
+      console.log(`   DELETE /api/consumer/cart/:cartItemId`);
+      console.log(`   DELETE /api/consumer/cart`);
+      console.log(`   POST /api/consumer/orders`);
+      console.log(`   GET  /api/consumer/orders`);
+      console.log(`   GET  /api/consumer/orders/:orderId`);
+      console.log(`   POST /api/consumer/promo-codes/validate`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
