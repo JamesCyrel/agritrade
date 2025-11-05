@@ -47,14 +47,8 @@ export default function LoginScreen() {
 
         // If farmer and not approved, send to setup/verification
         if (response.data.user.role === 'FARMER') {
-          if (response.data.user.verification_status === 'PENDING_DOCUMENTS') {
-            router.replace('/farmer/profile-setup');
-            return;
-          }
-          if (response.data.user.verification_status !== 'APPROVED') {
-            router.replace('/farmer/verification');
-            return;
-          }
+          router.replace('/farmer/profile');
+          return;
         }
         // Otherwise go to default redirect
         router.replace(response.data.redirectPath);

@@ -4,9 +4,11 @@ require('dotenv').config();
 
 const pool = require('./config/database');
 const User = require('./models/User');
+const Consumer = require('./models/Consumer');
 const authRoutes = require('./routes/authRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const consumerRoutes = require('./routes/consumerRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,11 +31,13 @@ app.get('/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/farmer', farmerRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/consumer', consumerRoutes);
 
 // Initialize database tables
 const initializeDatabase = async () => {
   try {
     await User.createTable();
+    await Consumer.createTables();
     console.log('✅ Database initialized successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
@@ -66,6 +70,17 @@ const startServer = async () => {
       console.log(`   GET  /api/admin/verifications/:userId`);
       console.log(`   POST /api/admin/verifications/:userId/approve`);
       console.log(`   POST /api/admin/verifications/:userId/reject`);
+      console.log(`\n🛒 Consumer endpoints:`);
+      console.log(`   GET  /api/consumer/profile`);
+      console.log(`   PUT  /api/consumer/profile`);
+      console.log(`   GET  /api/consumer/addresses`);
+      console.log(`   POST /api/consumer/addresses`);
+      console.log(`   PUT  /api/consumer/addresses/:addressId`);
+      console.log(`   DELETE /api/consumer/addresses/:addressId`);
+      console.log(`   GET  /api/consumer/payment-methods`);
+      console.log(`   POST /api/consumer/payment-methods`);
+      console.log(`   PUT  /api/consumer/payment-methods/:paymentId`);
+      console.log(`   DELETE /api/consumer/payment-methods/:paymentId`);
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);

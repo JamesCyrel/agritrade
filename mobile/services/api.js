@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = __DEV__
-  ? 'http://10.0.0.41:3000/api' // For development - use your computer's IP for physical device
+  ? 'http://10.0.0.42:3000/api' // For development - use your computer's IP for physical device
   : 'https://your-production-api.com/api'; // Update for production
 
 // Helper function to make API calls
@@ -110,6 +110,40 @@ export const adminAPI = {
     if (status) q.append('status', status);
     const qs = q.toString();
     return await apiCall(`/admin/users${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
+};
+
+// Consumer API calls
+export const consumerAPI = {
+  getProfile: async (token) => {
+    return await apiCall('/consumer/profile', 'GET', null, token);
+  },
+  updateProfile: async (token, { full_name }) => {
+    return await apiCall('/consumer/profile', 'PUT', { full_name }, token);
+  },
+  getAddresses: async (token) => {
+    return await apiCall('/consumer/addresses', 'GET', null, token);
+  },
+  addAddress: async (token, address) => {
+    return await apiCall('/consumer/addresses', 'POST', address, token);
+  },
+  updateAddress: async (token, addressId, address) => {
+    return await apiCall(`/consumer/addresses/${addressId}`, 'PUT', address, token);
+  },
+  deleteAddress: async (token, addressId) => {
+    return await apiCall(`/consumer/addresses/${addressId}`, 'DELETE', null, token);
+  },
+  getPaymentMethods: async (token) => {
+    return await apiCall('/consumer/payment-methods', 'GET', null, token);
+  },
+  addPaymentMethod: async (token, paymentMethod) => {
+    return await apiCall('/consumer/payment-methods', 'POST', paymentMethod, token);
+  },
+  updatePaymentMethod: async (token, paymentId, paymentMethod) => {
+    return await apiCall(`/consumer/payment-methods/${paymentId}`, 'PUT', paymentMethod, token);
+  },
+  deletePaymentMethod: async (token, paymentId) => {
+    return await apiCall(`/consumer/payment-methods/${paymentId}`, 'DELETE', null, token);
   },
 };
 
