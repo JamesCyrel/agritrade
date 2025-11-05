@@ -12,6 +12,7 @@ class Order {
         status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED')),
         delivery_address_id INTEGER REFERENCES consumer_addresses(address_id) ON DELETE SET NULL,
         payment_method_id INTEGER REFERENCES consumer_payment_methods(payment_id) ON DELETE SET NULL,
+        payment_type VARCHAR(20) DEFAULT 'DIGITAL' CHECK (payment_type IN ('DIGITAL', 'COD')),
         subtotal DECIMAL(10, 2) NOT NULL,
         delivery_fee DECIMAL(10, 2) DEFAULT 0,
         tax DECIMAL(10, 2) DEFAULT 0,
@@ -58,8 +59,38 @@ class Order {
       CREATE INDEX IF NOT EXISTS idx_promo_codes_code ON promo_codes(code);
     `;
 
+    // Add payment_type column if it doesn't exist (for existing tables)
+    const migrationQuery = `
+      DO $$ 
+      BEGIN 
+        -- Add column if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns 
+          WHERE table_name = 'orders' AND column_name = 'payment_type'
+        ) THEN
+          ALTER TABLE orders ADD COLUMN payment_type VARCHAR(20) DEFAULT 'DIGITAL';
+        END IF;
+        
+        -- Add constraint if it doesn't exist
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint 
+          WHERE conname = 'orders_payment_type_check'
+        ) THEN
+          ALTER TABLE orders ADD CONSTRAINT orders_payment_type_check 
+            CHECK (payment_type IN ('DIGITAL', 'COD'));
+        END IF;
+      END $$;
+    `;
+
     try {
       await pool.query(query);
+      // Run migration for existing tables
+      try {
+        await pool.query(migrationQuery);
+      } catch (migrationError) {
+        // Ignore migration errors (column might already exist)
+        console.log('Migration note:', migrationError.message);
+      }
       console.log('✅ Order tables created/verified');
     } catch (error) {
       console.error('❌ Error creating order tables:', error);
@@ -81,6 +112,7 @@ class Order {
       farmerId,
       deliveryAddressId,
       paymentMethodId,
+      paymentType = 'DIGITAL', // 'DIGITAL' or 'COD'
       subtotal,
       deliveryFee = 0,
       tax = 0,
@@ -97,16 +129,20 @@ class Order {
 
       const orderNumber = this.generateOrderNumber();
 
+      // Determine payment type from orderData
+      const finalPaymentType = paymentType || (paymentMethodId === 'COD' ? 'COD' : 'DIGITAL');
+      const finalPaymentMethodId = finalPaymentType === 'COD' ? null : paymentMethodId;
+
       // Create order
       const orderResult = await client.query(
         `INSERT INTO orders (
-          consumer_id, farmer_id, order_number, delivery_address_id, payment_method_id,
+          consumer_id, farmer_id, order_number, delivery_address_id, payment_method_id, payment_type,
           subtotal, delivery_fee, tax, discount_amount, promo_code, total_amount, notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *`,
         [
-          consumerId, farmerId, orderNumber, deliveryAddressId, paymentMethodId,
+          consumerId, farmerId, orderNumber, deliveryAddressId, finalPaymentMethodId, finalPaymentType,
           parseFloat(subtotal), parseFloat(deliveryFee), parseFloat(tax),
           parseFloat(discountAmount), promoCode, parseFloat(totalAmount), notes
         ]

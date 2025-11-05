@@ -2,21 +2,47 @@ const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Consumer = require('../models/Consumer');
+const Payment = require('../models/Payment');
 
 // OC-3: Create order from cart (Checkout)
 exports.createOrder = async (req, res) => {
   try {
-    const { deliveryAddressId, paymentMethodId, promoCode, notes } = req.body;
+    const { deliveryAddressId, paymentMethodId, paymentType, promoCode, notes } = req.body;
     const userId = req.user.userId;
 
-    if (!deliveryAddressId || !paymentMethodId) {
-      return res.status(400).json({ success: false, message: 'Delivery address and payment method are required' });
+    if (!deliveryAddressId) {
+      return res.status(400).json({ success: false, message: 'Delivery address is required' });
     }
 
-    // Get cart items
+    // Get cart items first
     const cartItems = await Cart.getCartItems(userId);
     if (cartItems.length === 0) {
       return res.status(400).json({ success: false, message: 'Cart is empty' });
+    }
+
+    // Determine payment type
+    const isCOD = paymentType === 'COD' || paymentMethodId === 'COD';
+    
+    // If COD, check eligibility before creating orders
+    if (isCOD) {
+      // Calculate total for COD eligibility check
+      const totalAmount = cartItems.reduce((sum, item) => {
+        return sum + (parseFloat(item.quantity) * parseFloat(item.unit_price));
+      }, 0);
+      
+      // Check COD eligibility for each unique farmer
+      const farmerIds = [...new Set(cartItems.map(item => item.farmer_id))];
+      for (const farmerId of farmerIds) {
+        const eligibility = await Payment.checkCODEligibility(userId, totalAmount, farmerId);
+        if (!eligibility.eligible) {
+          return res.status(400).json({ success: false, message: eligibility.reason || 'COD not available for this order' });
+        }
+      }
+    } else {
+      // Digital payment requires payment method ID
+      if (!paymentMethodId) {
+        return res.status(400).json({ success: false, message: 'Payment method is required for digital payments' });
+      }
     }
 
     // Group items by farmer
@@ -69,7 +95,8 @@ exports.createOrder = async (req, res) => {
         consumerId: userId,
         farmerId: parseInt(farmerId),
         deliveryAddressId,
-        paymentMethodId,
+        paymentMethodId: isCOD ? 'COD' : paymentMethodId,
+        paymentType: isCOD ? 'COD' : 'DIGITAL',
         subtotal,
         deliveryFee,
         tax,
@@ -79,6 +106,30 @@ exports.createOrder = async (req, res) => {
         notes,
         items: orderItems
       });
+
+      // Process payment based on type
+      if (isCOD) {
+        // Create COD transaction
+        const PaymentModel = require('../models/Payment');
+        await PaymentModel.createTransaction(
+          order.order_id,
+          'COD',
+          totalAmount,
+          null,
+          'COD - Payment pending delivery'
+        );
+      } else {
+        // Process digital payment (will be handled separately or can be done here)
+        // For now, we'll create a pending transaction
+        const PaymentModel = require('../models/Payment');
+        await PaymentModel.createTransaction(
+          order.order_id,
+          'CARD', // TODO: Determine from payment method
+          totalAmount,
+          null,
+          'Digital payment pending'
+        );
+      }
 
       // Decrement inventory for each item (PM-4)
       for (const item of items) {

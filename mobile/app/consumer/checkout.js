@@ -39,9 +39,41 @@ export default function CheckoutScreen() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [notes, setNotes] = useState("");
 
+  // Track if order was just placed to prevent showing confirmation on fresh load
+  const [orderJustPlaced, setOrderJustPlaced] = useState(false);
+  const [codEligible, setCodEligible] = useState(false);
+  const [checkingCodEligibility, setCheckingCodEligibility] = useState(false);
+
   useEffect(() => {
+    // Always reset to ADDRESS when component mounts
+    setCurrentStep(CHECKOUT_STEPS.ADDRESS);
+    setSelectedAddressId(null);
+    setSelectedPaymentId(null);
+    setPromoCode("");
+    setAppliedPromo(null);
+    setNotes("");
+    setPlacingOrder(false);
+    setOrderJustPlaced(false);
+    setCodEligible(false);
     loadCheckoutData();
   }, []);
+
+  // Check COD eligibility when cart data is loaded
+  useEffect(() => {
+    if (cartData.subtotal > 0 && cartData.items.length > 0) {
+      checkCODEligibility();
+    } else {
+      // Default to false if cart is empty
+      setCodEligible(false);
+    }
+  }, [cartData.subtotal, cartData.items.length]);
+
+  // Reset if we're at confirmation but order wasn't just placed
+  useEffect(() => {
+    if (currentStep === CHECKOUT_STEPS.CONFIRMATION && !orderJustPlaced) {
+      setCurrentStep(CHECKOUT_STEPS.ADDRESS);
+    }
+  }, [currentStep, orderJustPlaced]);
 
   const loadCheckoutData = async () => {
     try {
@@ -86,6 +118,28 @@ export default function CheckoutScreen() {
     }
   };
 
+  const checkCODEligibility = async () => {
+    try {
+      setCheckingCodEligibility(true);
+      const token = await AsyncStorage.getItem("authToken");
+      // Get first farmer ID from cart items (for now, check with first farmer)
+      const farmerId = cartData.items.length > 0 ? cartData.items[0].farmer_id : null;
+      const res = await consumerAPI.checkCODEligibility(token, cartData.subtotal, farmerId);
+      if (res.success && res.data) {
+        setCodEligible(res.data.eligible || false);
+      } else {
+        // Default to eligible if check fails (for now, backend will validate)
+        setCodEligible(true);
+      }
+    } catch (error) {
+      console.error("Check COD eligibility error:", error);
+      // Default to eligible if check fails (for now, backend will validate)
+      setCodEligible(true);
+    } finally {
+      setCheckingCodEligibility(false);
+    }
+  };
+
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) {
       Alert.alert("Error", "Please enter a promo code");
@@ -113,11 +167,20 @@ export default function CheckoutScreen() {
   };
 
   const handlePlaceOrder = async () => {
+    // Ensure we're on the payment step
+    if (currentStep !== CHECKOUT_STEPS.PAYMENT) {
+      console.log("Cannot place order - not on payment step");
+      return;
+    }
+
     if (!selectedAddressId) {
       Alert.alert("Error", "Please select a delivery address");
       return;
     }
-    if (!selectedPaymentId) {
+    
+    // Check if payment method is selected
+    const isCOD = selectedPaymentId === 'COD';
+    if (!isCOD && !selectedPaymentId) {
       Alert.alert("Error", "Please select a payment method");
       return;
     }
@@ -125,17 +188,28 @@ export default function CheckoutScreen() {
     try {
       setPlacingOrder(true);
       const token = await AsyncStorage.getItem("authToken");
-      const res = await consumerAPI.createOrder(token, {
+      const orderData = {
         deliveryAddressId: selectedAddressId,
-        paymentMethodId: selectedPaymentId,
+        paymentType: isCOD ? 'COD' : 'DIGITAL',
         promoCode: appliedPromo?.code || null,
         notes: notes.trim() || null,
-      });
+      };
+      
+      // Only include paymentMethodId for digital payments
+      if (!isCOD) {
+        orderData.paymentMethodId = selectedPaymentId;
+      }
+      
+      const res = await consumerAPI.createOrder(token, orderData);
 
       if (res.success) {
+        setOrderJustPlaced(true);
         setCurrentStep(CHECKOUT_STEPS.CONFIRMATION);
-        // After 2 seconds, navigate to orders
+        // After 2 seconds, navigate to orders and reset state
         setTimeout(() => {
+          // Reset all state before navigating
+          setOrderJustPlaced(false);
+          setCurrentStep(CHECKOUT_STEPS.ADDRESS);
           router.replace("/consumer/orders");
         }, 2000);
       } else {
@@ -143,7 +217,7 @@ export default function CheckoutScreen() {
       }
     } catch (error) {
       console.error("Place order error:", error);
-      Alert.alert("Error", "Failed to place order");
+      Alert.alert("Error", error.message || "Failed to place order");
     } finally {
       setPlacingOrder(false);
     }
@@ -163,7 +237,8 @@ export default function CheckoutScreen() {
     );
   }
 
-  if (currentStep === CHECKOUT_STEPS.CONFIRMATION) {
+  // Only show confirmation if order was just placed
+  if (currentStep === CHECKOUT_STEPS.CONFIRMATION && orderJustPlaced) {
     return (
       <View style={[styles.container, styles.confirmationContainer]}>
         <Text style={styles.confirmationIcon}>✅</Text>
@@ -341,6 +416,37 @@ export default function CheckoutScreen() {
         {currentStep === CHECKOUT_STEPS.PAYMENT && (
           <View>
             <Text style={styles.stepTitle}>Select Payment Method</Text>
+            
+            {/* COD Option - Always show, check eligibility */}
+            <TouchableOpacity
+              style={[
+                styles.paymentCard,
+                selectedPaymentId === 'COD' && styles.paymentCardActive,
+                !codEligible && styles.paymentCardDisabled,
+              ]}
+              onPress={() => {
+                if (codEligible || checkingCodEligibility) {
+                  setSelectedPaymentId('COD');
+                } else {
+                  Alert.alert("COD Unavailable", "Cash on Delivery is not available for this order. Please select a digital payment method.");
+                }
+              }}
+              disabled={!codEligible && !checkingCodEligibility}
+            >
+              <Text style={styles.paymentType}>💰 Cash on Delivery (COD)</Text>
+              <Text style={styles.paymentDetails}>
+                {checkingCodEligibility ? "Checking availability..." : (codEligible ? "Pay when your order is delivered" : "Not available for this order")}
+              </Text>
+              {selectedPaymentId === 'COD' && (codEligible || checkingCodEligibility) && (
+                <Text style={styles.defaultBadge}>Selected</Text>
+              )}
+              {!codEligible && !checkingCodEligibility && (
+                <Text style={styles.codUnavailableText}>Currently unavailable</Text>
+              )}
+            </TouchableOpacity>
+
+            {/* Digital Payment Methods */}
+            <Text style={styles.paymentSectionLabel}>Digital Payment Methods</Text>
             {paymentMethods.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyStateText}>No payment methods saved</Text>
@@ -415,7 +521,7 @@ export default function CheckoutScreen() {
           <TouchableOpacity
             style={[styles.placeOrderButton, placingOrder && styles.placeOrderButtonDisabled]}
             onPress={handlePlaceOrder}
-            disabled={placingOrder || !selectedPaymentId}
+            disabled={placingOrder || currentStep !== CHECKOUT_STEPS.PAYMENT || !selectedPaymentId}
           >
             {placingOrder ? (
               <ActivityIndicator color="#fff" />
@@ -609,8 +715,22 @@ const styles = StyleSheet.create({
     borderColor: "#2d5016",
     backgroundColor: "#e8f5e9",
   },
+  paymentCardDisabled: {
+    opacity: 0.5,
+    borderColor: "#ddd",
+  },
   paymentType: { fontSize: 16, fontWeight: "600", color: "#333", marginBottom: 8 },
   paymentDetails: { fontSize: 14, color: "#666" },
+  paymentSectionLabel: { fontSize: 16, fontWeight: "600", color: "#333", marginTop: 16, marginBottom: 12 },
+  codUnavailableCard: {
+    backgroundColor: "#fff3cd",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#ffc107",
+  },
+  codUnavailableText: { fontSize: 14, color: "#856404", fontStyle: "italic" },
   footer: {
     flexDirection: "row",
     padding: 16,

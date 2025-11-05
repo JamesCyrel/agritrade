@@ -200,6 +200,10 @@ export const consumerAPI = {
   validatePromoCode: async (token, code, orderAmount) => {
     return await apiCall('/consumer/promo-codes/validate', 'POST', { code, orderAmount }, token);
   },
+  // Payment System (PS-2)
+  checkCODEligibility: async (token, orderAmount, farmerId = null) => {
+    return await apiCall('/consumer/payments/cod/check-eligibility', 'POST', { orderAmount, farmerId }, token);
+  },
 };
 
 // Product API calls (Farmer)

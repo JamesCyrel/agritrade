@@ -3,6 +3,7 @@ const router = express.Router();
 const consumerController = require('../controllers/consumerController');
 const cartController = require('../controllers/cartController');
 const orderController = require('../controllers/orderController');
+const paymentController = require('../controllers/paymentController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and CONSUMER role
@@ -43,6 +44,11 @@ router.post('/orders', orderController.createOrder);
 router.get('/orders', orderController.getConsumerOrders);
 router.get('/orders/:orderId', orderController.getOrderDetails);
 router.post('/promo-codes/validate', orderController.validatePromoCode);
+
+// Payment System (PS-1, PS-2)
+router.post('/payments/process', paymentController.processDigitalPayment);
+router.post('/payments/cod/check-eligibility', paymentController.checkCODEligibility);
+router.post('/payments/cod/process', paymentController.processCODOrder);
 
 module.exports = router;
 
