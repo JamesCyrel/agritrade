@@ -1,0 +1,246 @@
+================================================================================
+                    AGRITRADE SYSTEM SETUP GUIDE
+================================================================================
+
+This guide will help you set up the complete AgriTrade system from scratch.
+Follow the steps in order to ensure everything works correctly.
+
+================================================================================
+                            PREREQUISITES
+================================================================================
+
+Before starting, make sure you have installed:
+
+1. Node.js (v14 or higher)
+   - Download from: https://nodejs.org/
+   - Verify installation: node --version
+
+2. PostgreSQL (v12 or higher)
+   - Download from: https://www.postgresql.org/download/
+   - Verify installation: psql --version
+   - Make sure PostgreSQL service is running
+
+3. npm (comes with Node.js)
+   - Verify installation: npm --version
+
+4. For Mobile App:
+   - Expo CLI (will be installed automatically)
+   - Expo Go app on your phone (for testing on physical device)
+   - OR Android Studio / Xcode for emulators
+
+================================================================================
+                         STEP 1: BACKEND SETUP
+================================================================================
+
+1. Navigate to backend directory:
+   cd agritrade/backend
+
+2. Install backend dependencies:
+   npm install
+
+3. Create .env file in the backend directory:
+   - Create a new file named ".env" in agritrade/backend/
+   - Add the following content (update with your database credentials):
+   
+     DB_HOST=localhost
+     DB_PORT=5432
+     DB_NAME=agritrader
+     DB_USER=postgres
+     DB_PASSWORD=your_postgres_password
+     JWT_SECRET=your_random_secret_key_here
+     PORT=3000
+   
+   Note: Replace "your_postgres_password" with your actual PostgreSQL password
+   Note: Replace "your_random_secret_key_here" with a secure random string
+         (You can generate one at: https://randomkeygen.com/)
+
+4. Create PostgreSQL database:
+   - Open PostgreSQL command line or pgAdmin
+   - Run: CREATE DATABASE agritrader;
+   - Or use pgAdmin GUI to create the database
+
+5. Run the admin seed script to create default admin account:
+   npm run seed:admin
+   
+   This will create:
+   - Email: admin@agritrade.com
+   - Password: admin123
+   - Role: ADMIN
+
+6. Start the backend server:
+   npm run dev    (for development with auto-reload)
+   OR
+   npm start      (for production)
+
+7. Verify backend is running:
+   - Open browser: http://localhost:3000/health
+   - You should see: {"success":true,"message":"AgriTrade API is running",...}
+   - Keep this terminal window open - the server must stay running
+
+================================================================================
+                         STEP 2: MOBILE APP SETUP
+================================================================================
+
+1. Navigate to mobile directory (in a NEW terminal window):
+   cd agritrade/mobile
+
+2. Install mobile app dependencies:
+   npm install
+
+3. Configure API URL (if needed):
+   - Open: agritrade/mobile/services/api.js
+   - Find the API_BASE_URL (around line 2-3)
+   - For emulator/simulator: Keep as is (http://localhost:3000/api)
+   - For physical device: Change to your computer's IP address:
+     const API_BASE_URL = 'http://YOUR_COMPUTER_IP:3000/api'; for example: http://192.168.1.1:3000/api
+     
+     To find your IP address:
+     - Windows: Open Command Prompt, type: ipconfig
+       Look for "IPv4 Address" (e.g., 192.168.1.100)
+     - Mac/Linux: Open Terminal, type: ifconfig
+       Look for "inet" under your network adapter
+
+4. Start the mobile app:
+   npx expo start
+   
+   This will:
+   - Start the Expo development server
+   - Show a QR code in the terminal
+   - Open Expo DevTools in your browser
+
+5. Run the app:
+   Option A - Physical Device:
+   - Install "Expo Go" app on your phone (iOS/Android)
+   - Scan the QR code from the terminal with:
+     * iOS: Camera app
+     * Android: Expo Go app
+   
+   Option B - Emulator/Simulator:
+   - Press 'a' for Android emulator
+   - Press 'i' for iOS simulator (Mac only)
+   - Press 'w' for web browser
+
+================================================================================
+                         STEP 3: VERIFY SETUP
+================================================================================
+
+1. Backend Verification:
+   ✓ Server is running on http://localhost:3000
+   ✓ Health check returns success
+   ✓ Admin account created (check server logs)
+
+2. Mobile App Verification:
+   ✓ App loads without errors
+   ✓ Can see login screen
+   ✓ Can login with admin credentials:
+     - Email: admin@agritrade.com
+     - Password: admin123
+
+3. Test Login:
+   - Open the mobile app
+   - Enter admin credentials
+   - Should redirect to Admin Dashboard
+   - If you see the dashboard, setup is complete!
+
+================================================================================
+                      DEFAULT ADMIN CREDENTIALS
+================================================================================
+
+Email:    admin@agritrade.com
+Password: admin123
+Role:     ADMIN
+
+IMPORTANT: Change these credentials after first login in production!
+
+================================================================================
+                         TROUBLESHOOTING
+================================================================================
+
+1. "Cannot connect to database"
+   - Check PostgreSQL is running
+   - Verify database credentials in .env file
+   - Make sure database "agritrader" exists
+
+2. "Port 3000 already in use"
+   - Change PORT in backend/.env file
+   - Update mobile/services/api.js to match new port
+
+3. "Module not found" errors
+   - Run "npm install" again in the problematic directory
+   - Delete node_modules folder and run npm install fresh
+
+4. Mobile app can't connect to backend
+   - Check backend server is running
+   - Verify API_BASE_URL in mobile/services/api.js
+   - For physical device: Use computer's IP address, not localhost
+   - Check firewall settings (may block port 3000)
+
+5. "Admin account already exists"
+   - This is normal - the seed script checks for duplicates
+   - You can use existing admin account or create new one via signup
+
+6. Database connection timeout
+   - Check PostgreSQL is running: 
+     * Windows: Services > PostgreSQL
+     * Mac: brew services list
+     * Linux: systemctl status postgresql
+
+================================================================================
+                         PROJECT STRUCTURE
+================================================================================
+
+agritrade/
+├── backend/              # Backend API (Node.js + Express + PostgreSQL)
+│   ├── config/           # Database configuration
+│   ├── controllers/      # Request handlers
+│   ├── models/           # Database models
+│   ├── routes/           # API routes
+│   ├── scripts/          # Seed/migration scripts
+│   └── server.js         # Main server file
+│
+├── mobile/               # Mobile App (React Native + Expo)
+│   ├── app/              # Screen components (file-based routing)
+│   ├── services/         # API service layer
+│   └── assets/           # Images and static files
+│
+└── SETUP_GUIDE.txt       # This file
+
+================================================================================
+                         QUICK REFERENCE
+================================================================================
+
+Backend Commands:
+  cd agritrade/backend
+  npm install              # Install dependencies
+  npm run seed:admin       # Create admin account
+  npm run dev              # Start development server
+  npm start                # Start production server
+
+Mobile Commands:
+  cd agritrade/mobile
+  npm install              # Install dependencies
+  npx expo start or npm start        # Start Expo development server
+
+  #!!!!make sure to on your hotspot on your laptop and connect the phone to the hotspot for the connection.
+
+Important Files:
+  backend/.env            # Backend configuration (create this!)
+  mobile/services/api.js  # API endpoint configuration
+
+================================================================================
+                         SUPPORT
+================================================================================
+
+If you encounter issues:
+1. Check the error messages in terminal
+2. Verify all prerequisites are installed
+3. Ensure database is running and accessible
+4. Check network connectivity for mobile app
+5. Review the troubleshooting section above
+
+================================================================================
+                         END OF SETUP GUIDE
+================================================================================
+
+Good luck with your AgriTrade setup! 🚀
+
