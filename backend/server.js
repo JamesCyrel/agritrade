@@ -57,9 +57,51 @@ const initializeDatabase = async () => {
     await Dispute.createTable();
     await HomepageContent.createTable();
     console.log('✅ Database initialized successfully');
+    
+    // Seed admin account if it doesn't exist
+    await seedAdminAccount();
   } catch (error) {
     console.error('❌ Database initialization error:', error);
     process.exit(1);
+  }
+};
+
+// Seed default admin account
+const seedAdminAccount = async () => {
+  try {
+    const User = require('./models/User');
+    const bcrypt = require('bcrypt');
+    
+    const ADMIN_EMAIL = 'admin@agritrade.com';
+    const ADMIN_PASSWORD = 'admin123';
+    
+    // Check if admin already exists
+    const existingAdmin = await User.findByEmailOrPhone(ADMIN_EMAIL, null);
+    
+    if (existingAdmin) {
+      console.log('ℹ️  Admin account already exists');
+      return;
+    }
+
+    // Create admin user
+    const adminUser = await User.create({
+      email: ADMIN_EMAIL,
+      phone: null,
+      password: ADMIN_PASSWORD,
+      role: 'ADMIN'
+    });
+
+    console.log('✅ Default admin account created');
+    console.log(`   Email: ${ADMIN_EMAIL}`);
+    console.log(`   Password: ${ADMIN_PASSWORD}`);
+  } catch (error) {
+    // Don't fail server startup if admin already exists
+    if (error.message === 'Email already exists') {
+      console.log('ℹ️  Admin account already exists');
+      return;
+    }
+    console.error('⚠️  Warning: Could not create admin account:', error.message);
+    // Don't exit - this is not critical for server startup
   }
 };
 
