@@ -47,8 +47,9 @@ app.use('/api/consumer', consumerRoutes);
 const initializeDatabase = async () => {
   try {
     await User.createTable();
-    await Consumer.createTables();
+    // Ensure products table exists before any consumer tables that reference it
     await Product.createTable();
+    await Consumer.createTables();
     await Cart.createTable();
     await Order.createTable();
     await Payment.createTable();
@@ -111,9 +112,9 @@ const startServer = async () => {
     // Initialize database
     await initializeDatabase();
 
-    // Start listening
-    app.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    // Start listening on all interfaces for LAN access (Expo physical devices)
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server is running on http://0.0.0.0:${PORT}`);
       console.log(`📝 API endpoints available at http://localhost:${PORT}/api`);
       console.log(`🔐 Auth endpoints:`);
       console.log(`   POST /api/auth/signup`);

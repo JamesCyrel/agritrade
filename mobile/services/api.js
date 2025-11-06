@@ -1,7 +1,28 @@
 // API Configuration
-const API_BASE_URL = __DEV__
-  ? 'http://10.0.0.39:3000/api' // For development - use your computer's IP for physical device
-  : 'https://your-production-api.com/api'; // Update for production
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+
+// Prefer a configured URL if provided via Expo public env or app.json extra
+const configuredRoot =
+  process.env.EXPO_PUBLIC_API_URL ||
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL ||
+  Constants.manifest?.extra?.EXPO_PUBLIC_API_URL; // fallback for classic manifest
+
+const defaultRoot = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+const normalizeBase = (root) => {
+  if (!root) return 'http://localhost:3000/api';
+  const trimmed = root.replace(/\/$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+};
+
+const API_BASE_URL = normalizeBase(configuredRoot || defaultRoot);
+
+if (__DEV__) {
+  // Helpful to see what the app is targeting
+  // eslint-disable-next-line no-console
+  console.log('[API] Base URL ->', API_BASE_URL);
+}
 
 // Helper function to make API calls
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
@@ -34,7 +55,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
     return data;
   } catch (error) {
-    // Re-throw error without logging to console
+    // Re-throw error without logging to console (callers can capture and display)
     throw error;
   }
 };
