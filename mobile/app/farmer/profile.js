@@ -31,7 +31,31 @@ export default function FarmerProfileScreen() {
   const [govIdNumber, setGovIdNumber] = useState("");
   const [proofOfAddress, setProofOfAddress] = useState("");
 
-  const handleLogout = () => router.replace("/auth/login");
+  const handleLogout = () => {
+    Alert.alert(
+      "🚪 Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem("authToken");
+              await AsyncStorage.removeItem("userData");
+              router.replace("/auth/login");
+            } catch (error) {
+              router.replace("/auth/login");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const load = async () => {
     try {

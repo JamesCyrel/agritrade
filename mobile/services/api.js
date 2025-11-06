@@ -34,7 +34,7 @@ export const apiCall = async (endpoint, method = 'GET', body = null, token = nul
 
     return data;
   } catch (error) {
-    console.error('API Error:', { url, message: error.message, status: error.status, body: error.body });
+    // Re-throw error without logging to console
     throw error;
   }
 };

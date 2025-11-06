@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -35,15 +36,30 @@ export default function AdminProfileScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    try {
-      await AsyncStorage.removeItem("authToken");
-      await AsyncStorage.removeItem("userData");
-      router.replace("/auth/login");
-    } catch (error) {
-      console.error("Logout error:", error);
-      router.replace("/auth/login");
-    }
+  const handleLogout = () => {
+    Alert.alert(
+      "🚪 Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem("authToken");
+              await AsyncStorage.removeItem("userData");
+              router.replace("/auth/login");
+            } catch (error) {
+              router.replace("/auth/login");
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {

@@ -20,13 +20,22 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    if (!email && !password) {
-      Alert.alert("Error", "Please enter email/phone and password");
+    // Validation
+    if (!email.trim()) {
+      Alert.alert(
+        "⚠️ Missing Information",
+        "Please enter your email or phone number to continue.",
+        [{ text: "OK", style: "default" }]
+      );
       return;
     }
 
-    if (!password) {
-      Alert.alert("Error", "Please enter your password");
+    if (!password.trim()) {
+      Alert.alert(
+        "⚠️ Missing Password",
+        "Please enter your password to continue.",
+        [{ text: "OK", style: "default" }]
+      );
       return;
     }
 
@@ -36,8 +45,8 @@ export default function LoginScreen() {
       // Determine if input is email or phone
       const isEmail = email.includes('@');
       const response = await authAPI.login(
-        isEmail ? email : null,
-        isEmail ? null : email,
+        isEmail ? email.trim() : null,
+        isEmail ? null : email.trim(),
         password
       );
       
@@ -54,14 +63,77 @@ export default function LoginScreen() {
         // Otherwise go to default redirect
         router.replace(response.data.redirectPath);
       } else {
-        Alert.alert("Login Failed", response.message || "Invalid credentials");
+        // Determine error type for better messaging
+        const errorMessage = response.message || "";
+        let title = "❌ Login Failed";
+        let message = "Invalid email/phone or password. Please try again.";
+
+        if (errorMessage.toLowerCase().includes('password')) {
+          title = "🔒 Invalid Password";
+          message = "The password you entered is incorrect. Please check your password and try again.";
+        } else if (errorMessage.toLowerCase().includes('user') || errorMessage.toLowerCase().includes('not found')) {
+          title = "👤 Account Not Found";
+          message = "No account found with this email/phone number. Please check your credentials or sign up for a new account.";
+        } else if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('phone')) {
+          title = "📧 Invalid Email/Phone";
+          message = "The email or phone number you entered is invalid. Please check and try again.";
+        }
+
+        Alert.alert(
+          title,
+          message,
+          [
+            { text: "OK", style: "default" },
+            { text: "Sign Up", style: "cancel", onPress: () => router.push("/auth/signup") }
+          ]
+        );
       }
     } catch (error) {
-      console.error("Login error:", error);
-      Alert.alert(
-        "Login Error",
-        error.message || "Unable to connect to server. Please check your internet connection."
-      );
+      // Check if error is from API response (has body with message)
+      if (error.body && error.body.message) {
+        // This is an API error response (like 401 for invalid credentials)
+        const errorMessage = error.body.message || "";
+        let title = "❌ Login Failed";
+        let message = "Invalid email/phone or password. Please try again.";
+
+        if (errorMessage.toLowerCase().includes('password')) {
+          title = "🔒 Invalid Password";
+          message = "The password you entered is incorrect. Please check your password and try again.";
+        } else if (errorMessage.toLowerCase().includes('user') || errorMessage.toLowerCase().includes('not found')) {
+          title = "👤 Account Not Found";
+          message = "No account found with this email/phone number. Please check your credentials or sign up for a new account.";
+        } else if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('phone')) {
+          title = "📧 Invalid Email/Phone";
+          message = "The email or phone number you entered is invalid. Please check and try again.";
+        }
+
+        Alert.alert(
+          title,
+          message,
+          [
+            { text: "OK", style: "default" },
+            { text: "Sign Up", style: "cancel", onPress: () => router.push("/auth/signup") }
+          ]
+        );
+      } else {
+        // This is a real connection error (network failure, timeout, etc.)
+        let title = "❌ Connection Error";
+        let message = "Unable to connect to the server. Please check your internet connection and try again.";
+
+        if (error.message && error.message.toLowerCase().includes('network')) {
+          title = "📡 Network Error";
+          message = "Unable to connect to the server. Please check your internet connection and try again.";
+        } else if (error.message && error.message.toLowerCase().includes('timeout')) {
+          title = "⏱️ Request Timeout";
+          message = "The request took too long. Please check your connection and try again.";
+        }
+
+        Alert.alert(
+          title,
+          message,
+          [{ text: "OK", style: "default" }]
+        );
+      }
     } finally {
       setLoading(false);
     }
