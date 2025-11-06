@@ -1,718 +1,555 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class Product {
-  // Create products table
   static async createTable() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS products (
-        product_id SERIAL PRIMARY KEY,
-        farmer_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        rice_type VARCHAR(20) NOT NULL CHECK (rice_type IN ('MILLED', 'UNMILLED_PADDY')),
-        variety_name VARCHAR(255) NOT NULL,
-        description TEXT,
-        price_per_kg DECIMAL(10, 2) NOT NULL,
-        available_quantity DECIMAL(10, 2) NOT NULL DEFAULT 0,
-        quantity_unit VARCHAR(10) DEFAULT 'KG' CHECK (quantity_unit IN ('KG', 'SACKS')),
-        status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED')),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS product_images (
-        image_id SERIAL PRIMARY KEY,
-        product_id INTEGER NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
-        image_url TEXT NOT NULL,
-        image_order INTEGER DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS product_sack_sizes (
-        sack_size_id SERIAL PRIMARY KEY,
-        product_id INTEGER NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
-        size_kg DECIMAL(10, 2) NOT NULL,
-        price DECIMAL(10, 2) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_products_farmer_id ON products(farmer_id);
-      CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
-      CREATE INDEX IF NOT EXISTS idx_product_images_product_id ON product_images(product_id);
-      CREATE INDEX IF NOT EXISTS idx_product_sack_sizes_product_id ON product_sack_sizes(product_id);
-
-      -- Update status constraint if needed (handles existing tables)
-      -- This must be done BEFORE migrating data to avoid constraint violations
-      DO $$ 
-      BEGIN
-        -- Drop old constraint if exists (might allow DELETED or not allow ARCHIVED)
-        IF EXISTS (
-          SELECT 1 FROM pg_constraint 
-          WHERE conname = 'products_status_check' 
-          AND conrelid = 'products'::regclass
-        ) THEN
-          ALTER TABLE products DROP CONSTRAINT products_status_check;
-        END IF;
-        -- Add new constraint that allows ARCHIVED
-        ALTER TABLE products ADD CONSTRAINT products_status_check 
-          CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED'));
-      END $$;
-
-      -- Migrate existing DELETED status to ARCHIVED (after constraint is updated)
-      DO $$ 
-      BEGIN
-        UPDATE products SET status = 'ARCHIVED' WHERE status = 'DELETED';
-      END $$;
-    `;
-
-    try {
-      await pool.query(query);
-      console.log('✅ Products tables created/verified');
-    } catch (error) {
-      console.error('❌ Error creating products tables:', error);
-      throw error;
-    }
+    console.log('ℹ️  Skipping runtime product table creation. Manage schema in Supabase.');
   }
 
-  // Create a new product
   static async create(farmerId, productData) {
     const { rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, images, sack_sizes } = productData;
 
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+    // Insert product
+    const { data: products, error: insertError } = await supabase
+      .from('products')
+      .insert([
+        {
+          farmer_id: farmerId,
+          rice_type,
+          variety_name,
+          description: description || null,
+          price_per_kg,
+          available_quantity,
+          quantity_unit: quantity_unit || 'KG',
+        },
+      ])
+      .select('product_id')
+      .single();
+    if (insertError) throw insertError;
+    const productId = products.product_id;
 
-      // Insert product
-      const productResult = await client.query(`
-        INSERT INTO products (farmer_id, rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING product_id, farmer_id, rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, status, created_at
-      `, [farmerId, rice_type, variety_name, description || null, price_per_kg, available_quantity, quantity_unit || 'KG']);
-
-      const product = productResult.rows[0];
-
-      // Insert images if provided
-      if (images && images.length > 0) {
-        for (let i = 0; i < images.length; i++) {
-          await client.query(`
-            INSERT INTO product_images (product_id, image_url, image_order)
-            VALUES ($1, $2, $3)
-          `, [product.product_id, images[i], i]);
-        }
-      }
-
-      // Insert sack sizes if provided
-      if (sack_sizes && sack_sizes.length > 0) {
-        for (const sack of sack_sizes) {
-          await client.query(`
-            INSERT INTO product_sack_sizes (product_id, size_kg, price)
-            VALUES ($1, $2, $3)
-          `, [product.product_id, sack.size_kg, sack.price]);
-        }
-      }
-
-      await client.query('COMMIT');
-
-      // Fetch complete product with images and sack sizes
-      return await this.findById(product.product_id);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    // Insert images
+    if (images && images.length > 0) {
+      const rows = images.map((url, idx) => ({ product_id: productId, image_url: url, image_order: idx }));
+      const { error: imgError } = await supabase.from('product_images').insert(rows);
+      if (imgError) throw imgError;
     }
+
+    // Insert sack sizes
+    if (sack_sizes && sack_sizes.length > 0) {
+      const rows = sack_sizes.map(s => ({ product_id: productId, size_kg: s.size_kg, price: s.price }));
+      const { error: sackError } = await supabase.from('product_sack_sizes').insert(rows);
+      if (sackError) throw sackError;
+    }
+
+    return await this.findById(productId);
   }
 
-  // Get product by ID with all related data
   static async findById(productId) {
-    const productResult = await pool.query(`
-      SELECT * FROM products WHERE product_id = $1
-    `, [productId]);
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('product_id', productId)
+      .limit(1);
+    if (error) throw error;
+    if (!products || products.length === 0) return null;
+    const product = products[0];
 
-    if (productResult.rows.length === 0) return null;
+    const { data: images, error: imgError } = await supabase
+      .from('product_images')
+      .select('image_url, image_order')
+      .eq('product_id', productId)
+      .order('image_order', { ascending: true });
+    if (imgError) throw imgError;
+    product.images = (images || []).map(r => r.image_url);
 
-    const product = productResult.rows[0];
-
-    // Get images
-    const imagesResult = await pool.query(`
-      SELECT image_url, image_order FROM product_images
-      WHERE product_id = $1
-      ORDER BY image_order ASC
-    `, [productId]);
-    product.images = imagesResult.rows.map(r => r.image_url);
-
-    // Get sack sizes
-    const sacksResult = await pool.query(`
-      SELECT size_kg, price FROM product_sack_sizes
-      WHERE product_id = $1
-      ORDER BY size_kg ASC
-    `, [productId]);
-    product.sack_sizes = sacksResult.rows;
+    const { data: sacks, error: sackError } = await supabase
+      .from('product_sack_sizes')
+      .select('size_kg, price')
+      .eq('product_id', productId)
+      .order('size_kg', { ascending: true });
+    if (sackError) throw sackError;
+    product.sack_sizes = sacks || [];
 
     return product;
   }
 
-  // Get all products for a farmer
   static async findByFarmerId(farmerId, includeInactive = false) {
-    let query = `
-      SELECT p.*, 
-        (SELECT array_agg(image_url ORDER BY image_order) 
-         FROM product_images 
-         WHERE product_id = p.product_id) as images,
-        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
-         FROM product_sack_sizes 
-         WHERE product_id = p.product_id) as sack_sizes
-      FROM products p
-      WHERE p.farmer_id = $1
-    `;
+    let query = supabase
+      .from('products')
+      .select('*')
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false });
 
     if (!includeInactive) {
-      query += ` AND p.status != 'ARCHIVED'`;
+      query = query.neq('status', 'ARCHIVED');
     }
 
-    query += ` ORDER BY p.created_at DESC`;
+    const { data: products, error } = await query;
+    if (error) throw error;
+    if (!products || products.length === 0) return [];
 
-    const result = await pool.query(query, [farmerId]);
-    return result.rows;
+    const ids = products.map(p => p.product_id);
+    const { data: images, error: imgError } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', ids)
+      .order('image_order', { ascending: true });
+    if (imgError) throw imgError;
+
+    const { data: sacks, error: sackError } = await supabase
+      .from('product_sack_sizes')
+      .select('product_id, size_kg, price')
+      .in('product_id', ids)
+      .order('size_kg', { ascending: true });
+    if (sackError) throw sackError;
+
+    const imageMap = new Map();
+    for (const img of images || []) {
+      if (!imageMap.has(img.product_id)) imageMap.set(img.product_id, []);
+      imageMap.get(img.product_id).push(img.image_url);
+    }
+
+    const sacksMap = new Map();
+    for (const s of sacks || []) {
+      if (!sacksMap.has(s.product_id)) sacksMap.set(s.product_id, []);
+      sacksMap.get(s.product_id).push({ size_kg: s.size_kg, price: s.price });
+    }
+
+    return products.map(p => ({
+      ...p,
+      images: imageMap.get(p.product_id) || [],
+      sack_sizes: sacksMap.get(p.product_id) || [],
+    }));
   }
 
-  // Update product
   static async update(productId, farmerId, productData) {
-    const { rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, status, images, sack_sizes } = productData;
-
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-
-      // Update product
-      const updateFields = [];
-      const updateValues = [];
-      let paramCount = 1;
-
-      if (rice_type !== undefined) {
-        updateFields.push(`rice_type = $${paramCount++}`);
-        updateValues.push(rice_type);
-      }
-      if (variety_name !== undefined) {
-        updateFields.push(`variety_name = $${paramCount++}`);
-        updateValues.push(variety_name);
-      }
-      if (description !== undefined) {
-        updateFields.push(`description = $${paramCount++}`);
-        updateValues.push(description);
-      }
-      if (price_per_kg !== undefined) {
-        updateFields.push(`price_per_kg = $${paramCount++}`);
-        updateValues.push(price_per_kg);
-      }
-      if (available_quantity !== undefined) {
-        updateFields.push(`available_quantity = $${paramCount++}`);
-        updateValues.push(available_quantity);
-      }
-      if (quantity_unit !== undefined) {
-        updateFields.push(`quantity_unit = $${paramCount++}`);
-        updateValues.push(quantity_unit);
-      }
-      if (status !== undefined) {
-        updateFields.push(`status = $${paramCount++}`);
-        updateValues.push(status);
-      }
-
-      updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-
-      if (updateFields.length > 1) {
-        updateValues.push(productId, farmerId);
-        await client.query(`
-          UPDATE products
-          SET ${updateFields.join(', ')}
-          WHERE product_id = $${paramCount++} AND farmer_id = $${paramCount++}
-        `, updateValues);
-      }
-
-      // Update images if provided
-      if (images !== undefined) {
-        // Delete existing images
-        await client.query(`DELETE FROM product_images WHERE product_id = $1`, [productId]);
-        
-        // Insert new images
-        if (images.length > 0) {
-          for (let i = 0; i < images.length; i++) {
-            await client.query(`
-              INSERT INTO product_images (product_id, image_url, image_order)
-              VALUES ($1, $2, $3)
-            `, [productId, images[i], i]);
-          }
-        }
-      }
-
-      // Update sack sizes if provided
-      if (sack_sizes !== undefined) {
-        // Delete existing sack sizes
-        await client.query(`DELETE FROM product_sack_sizes WHERE product_id = $1`, [productId]);
-        
-        // Insert new sack sizes
-        if (sack_sizes.length > 0) {
-          for (const sack of sack_sizes) {
-            await client.query(`
-              INSERT INTO product_sack_sizes (product_id, size_kg, price)
-              VALUES ($1, $2, $3)
-            `, [productId, sack.size_kg, sack.price]);
-          }
-        }
-      }
-
-      await client.query('COMMIT');
-
-      return await this.findById(productId);
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
+    const updatable = ['rice_type', 'variety_name', 'description', 'price_per_kg', 'available_quantity', 'quantity_unit', 'status'];
+    const patch = {};
+    for (const key of updatable) {
+      if (productData[key] !== undefined) patch[key] = productData[key];
     }
+
+    if (Object.keys(patch).length > 0) {
+      const { error: updError } = await supabase
+        .from('products')
+        .update(patch)
+        .eq('product_id', productId)
+        .eq('farmer_id', farmerId);
+      if (updError) throw updError;
+    }
+
+    if (productData.images !== undefined) {
+      const { error: delImgError } = await supabase
+        .from('product_images')
+        .delete()
+        .eq('product_id', productId);
+      if (delImgError) throw delImgError;
+
+      if (productData.images.length > 0) {
+        const rows = productData.images.map((url, idx) => ({ product_id: productId, image_url: url, image_order: idx }));
+        const { error: insImgError } = await supabase.from('product_images').insert(rows);
+        if (insImgError) throw insImgError;
+      }
+    }
+
+    if (productData.sack_sizes !== undefined) {
+      const { error: delSackError } = await supabase
+        .from('product_sack_sizes')
+        .delete()
+        .eq('product_id', productId);
+      if (delSackError) throw delSackError;
+
+      if (productData.sack_sizes.length > 0) {
+        const rows = productData.sack_sizes.map(s => ({ product_id: productId, size_kg: s.size_kg, price: s.price }));
+        const { error: insSackError } = await supabase.from('product_sack_sizes').insert(rows);
+        if (insSackError) throw insSackError;
+      }
+    }
+
+    return await this.findById(productId);
   }
 
-  // Archive product (soft delete by setting status to ARCHIVED)
   static async archive(productId, farmerId) {
-    const result = await pool.query(`
-      UPDATE products
-      SET status = 'ARCHIVED', updated_at = CURRENT_TIMESTAMP
-      WHERE product_id = $1 AND farmer_id = $2
-      RETURNING product_id
-    `, [productId, farmerId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('products')
+      .update({ status: 'ARCHIVED' })
+      .eq('product_id', productId)
+      .eq('farmer_id', farmerId)
+      .select('product_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Unarchive product (restore from ARCHIVED to INACTIVE)
   static async unarchive(productId, farmerId) {
-    const result = await pool.query(`
-      UPDATE products
-      SET status = 'INACTIVE', updated_at = CURRENT_TIMESTAMP
-      WHERE product_id = $1 AND farmer_id = $2 AND status = 'ARCHIVED'
-      RETURNING product_id
-    `, [productId, farmerId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('products')
+      .update({ status: 'INACTIVE' })
+      .eq('product_id', productId)
+      .eq('farmer_id', farmerId)
+      .eq('status', 'ARCHIVED')
+      .select('product_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Get archived products for a farmer
   static async findArchivedByFarmerId(farmerId) {
-    const query = `
-      SELECT p.*, 
-        (SELECT array_agg(image_url ORDER BY image_order) 
-         FROM product_images 
-         WHERE product_id = p.product_id) as images,
-        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
-         FROM product_sack_sizes 
-         WHERE product_id = p.product_id) as sack_sizes
-      FROM products p
-      WHERE p.farmer_id = $1 AND p.status = 'ARCHIVED'
-      ORDER BY p.updated_at DESC
-    `;
-    const result = await pool.query(query, [farmerId]);
-    return result.rows;
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('farmer_id', farmerId)
+      .eq('status', 'ARCHIVED')
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    if (!products || products.length === 0) return [];
+
+    const ids = products.map(p => p.product_id);
+    const { data: images } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', ids)
+      .order('image_order', { ascending: true });
+    const { data: sacks } = await supabase
+      .from('product_sack_sizes')
+      .select('product_id, size_kg, price')
+      .in('product_id', ids)
+      .order('size_kg', { ascending: true });
+
+    const imageMap = new Map();
+    for (const img of images || []) {
+      if (!imageMap.has(img.product_id)) imageMap.set(img.product_id, []);
+      imageMap.get(img.product_id).push(img.image_url);
+    }
+    const sacksMap = new Map();
+    for (const s of sacks || []) {
+      if (!sacksMap.has(s.product_id)) sacksMap.set(s.product_id, []);
+      sacksMap.get(s.product_id).push({ size_kg: s.size_kg, price: s.price });
+    }
+
+    return products.map(p => ({
+      ...p,
+      images: imageMap.get(p.product_id) || [],
+      sack_sizes: sacksMap.get(p.product_id) || [],
+    }));
   }
 
-  // Update inventory (quantity)
   static async updateInventory(productId, farmerId, quantity) {
-    const result = await pool.query(`
-      UPDATE products
-      SET available_quantity = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE product_id = $2 AND farmer_id = $3
-      RETURNING product_id, available_quantity
-    `, [quantity, productId, farmerId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('products')
+      .update({ available_quantity: quantity })
+      .eq('product_id', productId)
+      .eq('farmer_id', farmerId)
+      .select('product_id, available_quantity')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Decrement inventory (for order confirmation)
   static async decrementInventory(productId, quantity) {
-    const result = await pool.query(`
-      UPDATE products
-      SET available_quantity = GREATEST(0, available_quantity - $1), updated_at = CURRENT_TIMESTAMP
-      WHERE product_id = $2
-      RETURNING product_id, available_quantity
-    `, [quantity, productId]);
-    return result.rows[0];
+    // Not atomic; should be replaced by RPC for concurrency safety
+    const { data: prod, error: getErr } = await supabase
+      .from('products')
+      .select('available_quantity')
+      .eq('product_id', productId)
+      .single();
+    if (getErr) throw getErr;
+
+    const newQty = Math.max(0, parseFloat(prod.available_quantity) - parseFloat(quantity));
+    const { data, error } = await supabase
+      .from('products')
+      .update({ available_quantity: newQty })
+      .eq('product_id', productId)
+      .select('product_id, available_quantity')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Increment inventory (for order cancellation)
   static async incrementInventory(productId, quantity) {
-    const result = await pool.query(`
-      UPDATE products
-      SET available_quantity = available_quantity + $1, updated_at = CURRENT_TIMESTAMP
-      WHERE product_id = $2
-      RETURNING product_id, available_quantity
-    `, [quantity, productId]);
-    return result.rows[0];
+    const { data: prod, error: getErr } = await supabase
+      .from('products')
+      .select('available_quantity')
+      .eq('product_id', productId)
+      .single();
+    if (getErr) throw getErr;
+
+    const newQty = parseFloat(prod.available_quantity) + parseFloat(quantity);
+    const { data, error } = await supabase
+      .from('products')
+      .update({ available_quantity: newQty })
+      .eq('product_id', productId)
+      .select('product_id, available_quantity')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Check if farmer is verified
-  static async isFarmerVerified(farmerId) {
-    const result = await pool.query(`
-      SELECT verification_status FROM profiles
-      WHERE user_id = $1
-    `, [farmerId]);
-    return result.rows[0]?.verification_status === 'APPROVED';
-  }
-
-  // ===== CONSUMER BROWSING METHODS =====
-
-  // Get homepage data: Featured Farmers, Popular Rice Varieties, New Arrivals
+  // ===== Consumer browsing =====
   static async getHomepageData() {
-    const query = `
-      WITH farmer_stats AS (
-        SELECT 
-          p.farmer_id,
-          COUNT(DISTINCT p.product_id) as product_count,
-          AVG(p.price_per_kg) as avg_price,
-          pr.farm_name,
-          pr.full_name,
-          pr.address,
-          pr.latitude,
-          pr.longitude,
-          pr.verification_status,
-          -- Placeholder for ratings (will be implemented in RR-2)
-          0 as average_rating,
-          0 as total_reviews
-        FROM products p
-        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-        WHERE p.status = 'ACTIVE'
-          AND pr.verification_status = 'APPROVED'
-        GROUP BY p.farmer_id, pr.farm_name, pr.full_name, pr.address, pr.latitude, pr.longitude, pr.verification_status
-      ),
-      featured_farmers AS (
-        SELECT 
-          fs.farmer_id,
-          fs.farm_name,
-          fs.full_name,
-          fs.address,
-          fs.latitude,
-          fs.longitude,
-          fs.average_rating,
-          fs.total_reviews,
-          fs.product_count
-        FROM farmer_stats fs
-        ORDER BY fs.product_count DESC, fs.average_rating DESC
-        LIMIT 5
-      ),
-      popular_varieties AS (
-        SELECT 
-          p.product_id,
-          p.rice_type,
-          p.variety_name,
-          p.price_per_kg,
-          p.description,
-          p.available_quantity,
-          p.quantity_unit,
-          p.created_at,
-          pr.farm_name,
-          p.farmer_id,
-          -- Placeholder for ratings
-          0 as average_rating,
-          0 as total_reviews,
-          (SELECT array_agg(image_url ORDER BY image_order) 
-           FROM product_images 
-           WHERE product_id = p.product_id) as images
-        FROM products p
-        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-        WHERE p.status = 'ACTIVE'
-          AND pr.verification_status = 'APPROVED'
-          AND p.available_quantity > 0
-        ORDER BY p.available_quantity DESC, p.created_at DESC
-        LIMIT 10
-      ),
-      new_arrivals AS (
-        SELECT 
-          p.product_id,
-          p.rice_type,
-          p.variety_name,
-          p.price_per_kg,
-          p.description,
-          p.available_quantity,
-          p.quantity_unit,
-          p.created_at,
-          pr.farm_name,
-          p.farmer_id,
-          -- Placeholder for ratings
-          0 as average_rating,
-          0 as total_reviews,
-          (SELECT array_agg(image_url ORDER BY image_order) 
-           FROM product_images 
-           WHERE product_id = p.product_id) as images
-        FROM products p
-        INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-        WHERE p.status = 'ACTIVE'
-          AND pr.verification_status = 'APPROVED'
-          AND p.available_quantity > 0
-        ORDER BY p.created_at DESC
-        LIMIT 10
-      )
-      SELECT 
-        (SELECT json_agg(row_to_json(f)) FROM featured_farmers f) as featured_farmers,
-        (SELECT json_agg(row_to_json(v)) FROM popular_varieties v) as popular_varieties,
-        (SELECT json_agg(row_to_json(n)) FROM new_arrivals n) as new_arrivals;
-    `;
-    const result = await pool.query(query);
-    return result.rows[0] || { featured_farmers: [], popular_varieties: [], new_arrivals: [] };
+    // This is a simplified, multi-query version of the previous CTE query
+    const { data: activeProducts, error } = await supabase
+      .from('products')
+      .select('product_id, farmer_id, price_per_kg, description, available_quantity, variety_name, rice_type, quantity_unit, created_at')
+      .eq('status', 'ACTIVE');
+    if (error) throw error;
+
+    const farmerIds = Array.from(new Set(activeProducts.map(p => p.farmer_id)));
+    const { data: profiles, error: profErr } = await supabase
+      .from('profiles')
+      .select('user_id, farm_name, full_name, address, latitude, longitude, verification_status')
+      .in('user_id', farmerIds);
+    if (profErr) throw profErr;
+
+    const { data: imgs } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', activeProducts.map(p => p.product_id))
+      .order('image_order', { ascending: true });
+
+    const imageMap = new Map();
+    for (const img of imgs || []) {
+      if (!imageMap.has(img.product_id)) imageMap.set(img.product_id, []);
+      imageMap.get(img.product_id).push(img.image_url);
+    }
+
+    const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+
+    // Featured: top farmers by product count
+    const farmerCounts = new Map();
+    for (const p of activeProducts) {
+      const prof = profileMap.get(p.farmer_id);
+      if (!prof || prof.verification_status !== 'APPROVED' || p.available_quantity <= 0) continue;
+      farmerCounts.set(p.farmer_id, (farmerCounts.get(p.farmer_id) || 0) + 1);
+    }
+    const featuredFarmers = Array.from(farmerCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([farmer_id, product_count]) => {
+        const pr = profileMap.get(farmer_id);
+        return { farmer_id, farm_name: pr.farm_name, full_name: pr.full_name, address: pr.address, latitude: pr.latitude, longitude: pr.longitude, average_rating: 0, total_reviews: 0, product_count };
+      });
+
+    // Popular varieties and new arrivals
+    const filtered = activeProducts.filter(p => profileMap.get(p.farmer_id)?.verification_status === 'APPROVED' && p.available_quantity > 0);
+    const popularVarieties = filtered
+      .slice()
+      .sort((a, b) => b.available_quantity - a.available_quantity || Number(new Date(b.created_at)) - Number(new Date(a.created_at)))
+      .slice(0, 10)
+      .map(p => ({
+        ...p,
+        images: imageMap.get(p.product_id) || [],
+        average_rating: 0,
+        total_reviews: 0,
+        farm_name: profileMap.get(p.farmer_id)?.farm_name,
+      }));
+
+    const newArrivals = filtered
+      .slice()
+      .sort((a, b) => Number(new Date(b.created_at)) - Number(new Date(a.created_at)))
+      .slice(0, 10)
+      .map(p => ({
+        ...p,
+        images: imageMap.get(p.product_id) || [],
+        average_rating: 0,
+        total_reviews: 0,
+        farm_name: profileMap.get(p.farmer_id)?.farm_name,
+      }));
+
+    return { featured_farmers: featuredFarmers, popular_varieties: popularVarieties, new_arrivals: newArrivals };
   }
 
-  // Search products with filters and sorting (SB-2, SB-3)
-  static async searchProducts(searchParams) {
+  static async searchProducts(params) {
     const {
       searchQuery = '',
       riceType = null,
       minPrice = null,
       maxPrice = null,
-      maxDistance = null,
       consumerLat = null,
       consumerLng = null,
-      minRating = null,
-      sortBy = 'created_at',
-      sortOrder = 'DESC',
+      minRating = null, // placeholder
+      sortBy = 'newest',
       limit = 20,
-      offset = 0
-    } = searchParams;
+      offset = 0,
+    } = params;
 
-    let query = `
-      SELECT 
-        p.product_id,
-        p.rice_type,
-        p.variety_name,
-        p.description,
-        p.price_per_kg,
-        p.available_quantity,
-        p.quantity_unit,
-        p.created_at,
-        p.farmer_id,
-        pr.farm_name,
-        pr.full_name as farmer_name,
-        pr.address as farmer_address,
-        pr.latitude as farmer_latitude,
-        pr.longitude as farmer_longitude,
-        -- Placeholder for ratings
-        0 as average_rating,
-        0 as total_reviews,
-        (SELECT array_agg(image_url ORDER BY image_order) 
-         FROM product_images 
-         WHERE product_id = p.product_id) as images,
-        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
-         FROM product_sack_sizes 
-         WHERE product_id = p.product_id) as sack_sizes,
-        NULL as distance_km
-    `;
+    let query = supabase
+      .from('products')
+      .select('product_id, rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, created_at, farmer_id')
+      .eq('status', 'ACTIVE')
+      .gt('available_quantity', 0);
 
-    query += `
-      FROM products p
-      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-      WHERE p.status = 'ACTIVE'
-        AND pr.verification_status = 'APPROVED'
-        AND p.available_quantity > 0
-    `;
-
-    const conditions = [];
-    const params = [];
-    let paramCount = 1;
-
-    // Search query (variety name or farmer name)
-    if (searchQuery.trim()) {
-      conditions.push(`(
-        p.variety_name ILIKE $${paramCount} OR 
-        pr.farm_name ILIKE $${paramCount} OR
-        pr.full_name ILIKE $${paramCount}
-      )`);
-      params.push(`%${searchQuery.trim()}%`);
-      paramCount++;
-    }
-
-    // Rice type filter
     if (riceType && ['MILLED', 'UNMILLED_PADDY'].includes(riceType)) {
-      conditions.push(`p.rice_type = $${paramCount}`);
-      params.push(riceType);
-      paramCount++;
+      query = query.eq('rice_type', riceType);
     }
 
-    // Price range filter
-    if (minPrice !== null) {
-      conditions.push(`p.price_per_kg >= $${paramCount}`);
-      params.push(parseFloat(minPrice));
-      paramCount++;
-    }
-    if (maxPrice !== null) {
-      conditions.push(`p.price_per_kg <= $${paramCount}`);
-      params.push(parseFloat(maxPrice));
-      paramCount++;
+    if (minPrice !== null) query = query.gte('price_per_kg', parseFloat(minPrice));
+    if (maxPrice !== null) query = query.lte('price_per_kg', parseFloat(maxPrice));
+
+    if (searchQuery.trim()) {
+      // Basic case-insensitive match on variety_name; could extend to farm_name via client-side join
+      query = query.ilike('variety_name', `%${searchQuery.trim()}%`);
     }
 
-    // Rating filter (placeholder - will use actual ratings table later)
-    if (minRating !== null) {
-      // For now, we'll skip rating filter as ratings aren't implemented yet
-      // This will be updated when RR-2 is implemented
-    }
-
-    if (conditions.length > 0) {
-      query += ` AND ${conditions.join(' AND ')}`;
-    }
-
-    // Distance filter (after selecting, so we need a subquery or CTE)
-    if (maxDistance !== null && consumerLat && consumerLng) {
-      const baseQuery = query;
-      query = `
-        WITH filtered_products AS (
-          ${baseQuery}
-        )
-        SELECT *, 
-          (
-            6371 * acos(
-              cos(radians(${consumerLat})) * 
-              cos(radians(farmer_latitude::numeric)) * 
-              cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
-              sin(radians(${consumerLat})) * 
-              sin(radians(farmer_latitude::numeric))
-            )
-          ) as distance_km
-        FROM filtered_products
-        WHERE (
-          6371 * acos(
-            cos(radians(${consumerLat})) * 
-            cos(radians(farmer_latitude::numeric)) * 
-            cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
-            sin(radians(${consumerLat})) * 
-            sin(radians(farmer_latitude::numeric))
-          )
-        ) <= $${paramCount}
-      `;
-      params.push(parseFloat(maxDistance));
-      paramCount++;
-    } else if (consumerLat && consumerLng) {
-      // Calculate distance even if not filtering by it
-      const baseQuery = query;
-      query = `
-        SELECT *, 
-          (
-            6371 * acos(
-              cos(radians(${consumerLat})) * 
-              cos(radians(farmer_latitude::numeric)) * 
-              cos(radians(farmer_longitude::numeric) - radians(${consumerLng})) + 
-              sin(radians(${consumerLat})) * 
-              sin(radians(farmer_latitude::numeric))
-            )
-          ) as distance_km
-        FROM (${baseQuery}) as base_query
-      `;
-    }
-
-    // Sorting
-    const validSortFields = {
-      'price_low': 'p.price_per_kg ASC',
-      'price_high': 'p.price_per_kg DESC',
-      'rating': 'average_rating DESC', // Placeholder
-      'distance': 'distance_km ASC',
-      'newest': 'p.created_at DESC',
-      'oldest': 'p.created_at ASC'
+    // Sort handling
+    const sortMap = {
+      price_low: { column: 'price_per_kg', ascending: true },
+      price_high: { column: 'price_per_kg', ascending: false },
+      newest: { column: 'created_at', ascending: false },
+      oldest: { column: 'created_at', ascending: true },
     };
+    const sort = sortMap[sortBy] || sortMap.newest;
+    query = query.order(sort.column, { ascending: sort.ascending }).range(offset, offset + limit - 1);
 
-    const sortClause = validSortFields[sortBy] || 'p.created_at DESC';
-    query += ` ORDER BY ${sortClause}`;
+    const { data: products, error } = await query;
+    if (error) throw error;
 
-    // Pagination
-    query += ` LIMIT $${paramCount} OFFSET $${paramCount + 1}`;
-    params.push(parseInt(limit), parseInt(offset));
+    if (!products || products.length === 0) return [];
 
-    const result = await pool.query(query, params);
-    return result.rows;
-  }
-
-  // Get product details with farmer info (SB-4)
-  static async getProductDetailsForConsumer(productId) {
-    const query = `
-      SELECT 
-        p.product_id,
-        p.rice_type,
-        p.variety_name,
-        p.description,
-        p.price_per_kg,
-        p.available_quantity,
-        p.quantity_unit,
-        p.created_at,
-        p.updated_at,
-        p.farmer_id,
-        pr.farm_name,
-        pr.full_name as farmer_name,
-        pr.address as farmer_address,
-        pr.latitude as farmer_latitude,
-        pr.longitude as farmer_longitude,
-        -- Placeholder for ratings
-        0 as average_rating,
-        0 as total_reviews,
-        (SELECT array_agg(image_url ORDER BY image_order) 
-         FROM product_images 
-         WHERE product_id = p.product_id) as images,
-        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
-         FROM product_sack_sizes 
-         WHERE product_id = p.product_id) as sack_sizes
-      FROM products p
-      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-      WHERE p.product_id = $1
-        AND p.status = 'ACTIVE'
-        AND pr.verification_status = 'APPROVED'
-    `;
-    const result = await pool.query(query, [productId]);
-    return result.rows[0] || null;
-  }
-
-  // Get farmer storefront (SB-5)
-  static async getFarmerStorefront(farmerId) {
-    // Get farmer profile
-    const profileQuery = `
-      SELECT 
-        pr.user_id as farmer_id,
-        pr.farm_name,
-        pr.full_name,
-        pr.address,
-        pr.latitude,
-        pr.longitude,
-        pr.verification_status,
-        (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE farmer_id = pr.user_id) as average_rating,
-        (SELECT COUNT(*) FROM reviews WHERE farmer_id = pr.user_id) as total_reviews
-      FROM profiles pr
-      WHERE pr.user_id = $1
-        AND pr.verification_status = 'APPROVED'
-    `;
-    const profileResult = await pool.query(profileQuery, [farmerId]);
-    if (profileResult.rows.length === 0) {
-      return null;
+    const ids = products.map(p => p.product_id);
+    const { data: images } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', ids)
+      .order('image_order', { ascending: true });
+    const imageMap = new Map();
+    for (const img of images || []) {
+      if (!imageMap.has(img.product_id)) imageMap.set(img.product_id, []);
+      imageMap.get(img.product_id).push(img.image_url);
     }
 
-    const farmerProfile = profileResult.rows[0];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, farm_name, full_name, address, latitude, longitude, verification_status')
+      .in('user_id', Array.from(new Set(products.map(p => p.farmer_id))));
+    const profMap = new Map((profiles || []).map(p => [p.user_id, p]));
 
-    // Get all active products
-    const productsQuery = `
-      SELECT 
-        p.product_id,
-        p.rice_type,
-        p.variety_name,
-        p.description,
-        p.price_per_kg,
-        p.available_quantity,
-        p.quantity_unit,
-        p.created_at,
-        -- Placeholder for ratings
-        0 as average_rating,
-        0 as total_reviews,
-        (SELECT array_agg(image_url ORDER BY image_order) 
-         FROM product_images 
-         WHERE product_id = p.product_id) as images,
-        (SELECT json_agg(json_build_object('size_kg', size_kg, 'price', price) ORDER BY size_kg)
-         FROM product_sack_sizes 
-         WHERE product_id = p.product_id) as sack_sizes
-      FROM products p
-      WHERE p.farmer_id = $1
-        AND p.status = 'ACTIVE'
-        AND p.available_quantity > 0
-      ORDER BY p.created_at DESC
-    `;
-    const productsResult = await pool.query(productsQuery, [farmerId]);
+    const withJoins = products
+      .map(p => {
+        const pr = profMap.get(p.farmer_id);
+        if (!pr || pr.verification_status !== 'APPROVED') return null;
+        return {
+          ...p,
+          images: imageMap.get(p.product_id) || [],
+          farmer_name: pr.full_name,
+          farm_name: pr.farm_name,
+          farmer_address: pr.address,
+          farmer_latitude: pr.latitude,
+          farmer_longitude: pr.longitude,
+          average_rating: 0,
+          total_reviews: 0,
+          distance_km: null,
+        };
+      })
+      .filter(Boolean);
+
+    // Distance calculation remains client-side placeholder
+    return withJoins;
+  }
+
+  static async getProductDetailsForConsumer(productId) {
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('product_id, rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, created_at, updated_at, farmer_id, status')
+      .eq('product_id', productId)
+      .eq('status', 'ACTIVE')
+      .limit(1);
+    if (error) throw error;
+    if (!products || products.length === 0) return null;
+    const p = products[0];
+
+    const { data: pr, error: profError } = await supabase
+      .from('profiles')
+      .select('farm_name, full_name, address, latitude, longitude, verification_status')
+      .eq('user_id', p.farmer_id)
+      .single();
+    if (profError) throw profError;
+    if (!pr || pr.verification_status !== 'APPROVED') return null;
+
+    const { data: images } = await supabase
+      .from('product_images')
+      .select('image_url, image_order')
+      .eq('product_id', p.product_id)
+      .order('image_order', { ascending: true });
+
+    const { data: sacks } = await supabase
+      .from('product_sack_sizes')
+      .select('size_kg, price')
+      .eq('product_id', p.product_id)
+      .order('size_kg', { ascending: true });
 
     return {
-      farmer: farmerProfile,
-      products: productsResult.rows
+      ...p,
+      farm_name: pr.farm_name,
+      farmer_name: pr.full_name,
+      farmer_address: pr.address,
+      farmer_latitude: pr.latitude,
+      farmer_longitude: pr.longitude,
+      average_rating: 0,
+      total_reviews: 0,
+      images: (images || []).map(i => i.image_url),
+      sack_sizes: sacks || [],
+    };
+  }
+
+  static async getFarmerStorefront(farmerId) {
+    const { data: pr, error: profError } = await supabase
+      .from('profiles')
+      .select('user_id, farm_name, full_name, address, latitude, longitude, verification_status')
+      .eq('user_id', farmerId)
+      .single();
+    if (profError) throw profError;
+    if (!pr || pr.verification_status !== 'APPROVED') return null;
+
+    const { data: products, error } = await supabase
+      .from('products')
+      .select('product_id, rice_type, variety_name, description, price_per_kg, available_quantity, quantity_unit, created_at')
+      .eq('farmer_id', farmerId)
+      .eq('status', 'ACTIVE')
+      .gt('available_quantity', 0)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    const ids = products.map(p => p.product_id);
+    const { data: images } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', ids)
+      .order('image_order', { ascending: true });
+    const { data: sacks } = await supabase
+      .from('product_sack_sizes')
+      .select('product_id, size_kg, price')
+      .in('product_id', ids)
+      .order('size_kg', { ascending: true });
+
+    const imageMap = new Map();
+    for (const img of images || []) {
+      if (!imageMap.has(img.product_id)) imageMap.set(img.product_id, []);
+      imageMap.get(img.product_id).push(img.image_url);
+    }
+    const sacksMap = new Map();
+    for (const s of sacks || []) {
+      if (!sacksMap.has(s.product_id)) sacksMap.set(s.product_id, []);
+      sacksMap.get(s.product_id).push({ size_kg: s.size_kg, price: s.price });
+    }
+
+    return {
+      farmer: {
+        farmer_id: pr.user_id,
+        farm_name: pr.farm_name,
+        full_name: pr.full_name,
+        address: pr.address,
+        latitude: pr.latitude,
+        longitude: pr.longitude,
+        verification_status: pr.verification_status,
+        average_rating: 0,
+        total_reviews: 0,
+      },
+      products: products.map(p => ({
+        ...p,
+        images: imageMap.get(p.product_id) || [],
+        sack_sizes: sacksMap.get(p.product_id) || [],
+      })),
     };
   }
 }

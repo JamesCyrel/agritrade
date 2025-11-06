@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class Profile {
   static async upsertFarmerProfile(userId, {
@@ -11,47 +11,56 @@ class Profile {
     latitude,
     longitude,
   }) {
-    const query = `
-      INSERT INTO profiles (
-        user_id, full_name, farm_name, address, bank_account_number,
-        bank_name, branch_code, verification_status, latitude, longitude
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,
-        COALESCE((SELECT verification_status FROM profiles WHERE user_id=$1),'PENDING_DOCUMENTS'),
-        $8,$9
-      )
-      ON CONFLICT (user_id) DO UPDATE SET
-        full_name = EXCLUDED.full_name,
-        farm_name = EXCLUDED.farm_name,
-        address = EXCLUDED.address,
-        bank_account_number = EXCLUDED.bank_account_number,
-        bank_name = EXCLUDED.bank_name,
-        branch_code = EXCLUDED.branch_code,
-        latitude = EXCLUDED.latitude,
-        longitude = EXCLUDED.longitude,
-        updated_at = NOW()
-      RETURNING profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude;
-    `;
-    const params = [userId, full_name || null, farm_name || null, address || null, bank_account_number || null, bank_name || null, branch_code || null, latitude || null, longitude || null];
-    const res = await pool.query(query, params);
-    return res.rows[0];
+    const payload = {
+      user_id: userId,
+      full_name: full_name || null,
+      farm_name: farm_name || null,
+      address: address || null,
+      bank_account_number: bank_account_number || null,
+      bank_name: bank_name || null,
+      branch_code: branch_code || null,
+      latitude: latitude || null,
+      longitude: longitude || null,
+    };
+
+    // Preserve existing verification_status or default to PENDING_DOCUMENTS
+    const { data: existing } = await supabase
+      .from('profiles')
+      .select('verification_status')
+      .eq('user_id', userId)
+      .limit(1);
+    if (!payload.verification_status) {
+      payload.verification_status = existing && existing[0]?.verification_status || 'PENDING_DOCUMENTS';
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(payload, { onConflict: 'user_id' })
+      .select('profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async getByUserId(userId) {
-    const res = await pool.query(
-      `SELECT profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude
-       FROM profiles WHERE user_id=$1`,
-      [userId]
-    );
-    return res.rows[0] || null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude')
+      .eq('user_id', userId)
+      .single();
+    if (error) throw error;
+    return data || null;
   }
 
   static async setVerificationStatus(userId, status, reason = null) {
-    const res = await pool.query(
-      `UPDATE profiles SET verification_status=$2, updated_at=NOW(), verification_reason=$3 WHERE user_id=$1 RETURNING verification_status`,
-      [userId, status, reason]
-    );
-    return res.rows[0];
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ verification_status: status, verification_reason: reason || null })
+      .eq('user_id', userId)
+      .select('verification_status')
+      .single();
+    if (error) throw error;
+    return data;
   }
 }
 

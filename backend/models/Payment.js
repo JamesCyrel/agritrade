@@ -1,283 +1,203 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class Payment {
-  // Create payment system tables
   static async createTable() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS payment_transactions (
-        transaction_id SERIAL PRIMARY KEY,
-        order_id INTEGER NOT NULL REFERENCES orders(order_id) ON DELETE CASCADE,
-        payment_method VARCHAR(20) NOT NULL CHECK (payment_method IN ('CARD', 'WALLET', 'UPI', 'COD')),
-        payment_status VARCHAR(20) DEFAULT 'PENDING' CHECK (payment_status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'REFUNDED')),
-        amount DECIMAL(10, 2) NOT NULL,
-        gateway_transaction_id VARCHAR(255),
-        gateway_response TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS farmer_ledger (
-        ledger_id SERIAL PRIMARY KEY,
-        farmer_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        order_id INTEGER REFERENCES orders(order_id) ON DELETE SET NULL,
-        transaction_type VARCHAR(20) NOT NULL CHECK (transaction_type IN ('EARNING', 'COMMISSION', 'PAYOUT', 'REFUND', 'COD_FEE')),
-        amount DECIMAL(10, 2) NOT NULL,
-        balance_before DECIMAL(10, 2) NOT NULL,
-        balance_after DECIMAL(10, 2) NOT NULL,
-        description TEXT,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS farmer_payouts (
-        payout_id SERIAL PRIMARY KEY,
-        farmer_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        payout_period_start DATE NOT NULL,
-        payout_period_end DATE NOT NULL,
-        total_earnings DECIMAL(10, 2) NOT NULL,
-        commission_amount DECIMAL(10, 2) NOT NULL,
-        net_amount DECIMAL(10, 2) NOT NULL,
-        status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
-        bank_account_number VARCHAR(50),
-        bank_name VARCHAR(100),
-        branch_code VARCHAR(20),
-        payout_date DATE,
-        transaction_reference VARCHAR(255),
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS cod_settings (
-        setting_id SERIAL PRIMARY KEY,
-        farmer_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-        is_enabled BOOLEAN DEFAULT TRUE,
-        min_order_amount DECIMAL(10, 2) DEFAULT 0,
-        max_order_amount DECIMAL(10, 2),
-        allowed_areas TEXT[], -- Array of allowed areas/cities
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(farmer_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS cod_eligibility (
-        eligibility_id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        is_eligible BOOLEAN DEFAULT TRUE,
-        reason TEXT,
-        max_order_value DECIMAL(10, 2),
-        restrictions TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id)
-      );
-
-      CREATE TABLE IF NOT EXISTS commission_settings (
-        setting_id SERIAL PRIMARY KEY,
-        commission_rate DECIMAL(5, 4) NOT NULL DEFAULT 0.05,
-        min_commission DECIMAL(10, 2) DEFAULT 0,
-        updated_by INTEGER REFERENCES users(user_id),
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(setting_id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_payment_transactions_order_id ON payment_transactions(order_id);
-      CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(payment_status);
-      CREATE INDEX IF NOT EXISTS idx_farmer_ledger_farmer_id ON farmer_ledger(farmer_id);
-      CREATE INDEX IF NOT EXISTS idx_farmer_ledger_order_id ON farmer_ledger(order_id);
-      CREATE INDEX IF NOT EXISTS idx_farmer_payouts_farmer_id ON farmer_payouts(farmer_id);
-      CREATE INDEX IF NOT EXISTS idx_farmer_payouts_status ON farmer_payouts(status);
-      CREATE INDEX IF NOT EXISTS idx_cod_settings_farmer_id ON cod_settings(farmer_id);
-      CREATE INDEX IF NOT EXISTS idx_cod_eligibility_user_id ON cod_eligibility(user_id);
-
-      -- Initialize commission settings if not exists
-      INSERT INTO commission_settings (commission_rate, setting_id)
-      SELECT 0.05, 1
-      WHERE NOT EXISTS (SELECT 1 FROM commission_settings);
-    `;
-
-    try {
-      await pool.query(query);
-      console.log('✅ Payment tables created/verified');
-    } catch (error) {
-      console.error('❌ Error creating payment tables:', error);
-      throw error;
-    }
+    console.log('ℹ️  Skipping runtime payment table creation. Manage schema in Supabase.');
   }
 
-  // Create payment transaction (PS-1, PS-2)
   static async createTransaction(orderId, paymentMethod, amount, gatewayTransactionId = null, gatewayResponse = null) {
-    const result = await pool.query(
-      `INSERT INTO payment_transactions (order_id, payment_method, amount, gateway_transaction_id, gateway_response, payment_status)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [orderId, paymentMethod, parseFloat(amount), gatewayTransactionId, gatewayResponse, paymentMethod === 'COD' ? 'PENDING' : 'PROCESSING']
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .insert([
+        {
+          order_id: orderId,
+          payment_method: paymentMethod,
+          amount: parseFloat(amount),
+          gateway_transaction_id: gatewayTransactionId || null,
+          gateway_response: gatewayResponse || null,
+          payment_status: paymentMethod === 'COD' ? 'PENDING' : 'PROCESSING',
+        },
+      ])
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Update payment transaction status
   static async updateTransactionStatus(transactionId, status, gatewayResponse = null) {
-    const result = await pool.query(
-      `UPDATE payment_transactions 
-       SET payment_status = $1, gateway_response = $2, updated_at = CURRENT_TIMESTAMP 
-       WHERE transaction_id = $3
-       RETURNING *`,
-      [status, gatewayResponse, transactionId]
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .update({ payment_status: status, gateway_response: gatewayResponse || null })
+      .eq('transaction_id', transactionId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Get transaction by order ID
   static async getTransactionByOrderId(orderId) {
-    const result = await pool.query(
-      `SELECT * FROM payment_transactions WHERE order_id = $1`,
-      [orderId]
-    );
-    return result.rows[0] || null;
+    const { data, error } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .eq('order_id', orderId)
+      .limit(1);
+    if (error) throw error;
+    return (data && data[0]) || null;
   }
 
-  // Check if earning already recorded for an order (to avoid duplicates)
   static async hasEarningForOrder(farmerId, orderId) {
-    const result = await pool.query(
-      `SELECT 1 FROM farmer_ledger 
-       WHERE farmer_id = $1 AND order_id = $2 AND transaction_type = 'EARNING' 
-       LIMIT 1`,
-      [farmerId, orderId]
-    );
-    return result.rows.length > 0;
+    const { count, error } = await supabase
+      .from('farmer_ledger')
+      .select('ledger_id', { count: 'exact', head: true })
+      .eq('farmer_id', farmerId)
+      .eq('order_id', orderId)
+      .eq('transaction_type', 'EARNING');
+    if (error) throw error;
+    return (count || 0) > 0;
   }
 
-  // Add ledger entry (PS-3)
   static async addLedgerEntry(farmerId, orderId, transactionType, amount, description = null) {
-    // Get current balance
-    const currentBalance = await this.getFarmerBalance(farmerId);
-    const balanceBefore = currentBalance;
+    const balanceBefore = await this.getFarmerBalance(farmerId);
     const balanceAfter = balanceBefore + parseFloat(amount);
 
-    const result = await pool.query(
-      `INSERT INTO farmer_ledger (farmer_id, order_id, transaction_type, amount, balance_before, balance_after, description)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [farmerId, orderId, transactionType, parseFloat(amount), balanceBefore, balanceAfter, description]
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('farmer_ledger')
+      .insert([
+        {
+          farmer_id: farmerId,
+          order_id: orderId || null,
+          transaction_type: transactionType,
+          amount: parseFloat(amount),
+          balance_before: balanceBefore,
+          balance_after: balanceAfter,
+          description: description || null,
+        },
+      ])
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Get farmer current balance
   static async getFarmerBalance(farmerId) {
-    const result = await pool.query(
-      `SELECT balance_after FROM farmer_ledger 
-       WHERE farmer_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [farmerId]
-    );
-    return result.rows.length > 0 ? parseFloat(result.rows[0].balance_after) : 0;
+    const { data, error } = await supabase
+      .from('farmer_ledger')
+      .select('balance_after, created_at')
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (error) throw error;
+    return data && data.length > 0 ? parseFloat(data[0].balance_after) : 0;
   }
 
-  // Get farmer ledger entries
   static async getFarmerLedger(farmerId, limit = 50, offset = 0) {
-    const result = await pool.query(
-      `SELECT * FROM farmer_ledger 
-       WHERE farmer_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT $2 OFFSET $3`,
-      [farmerId, limit, offset]
-    );
-    return result.rows;
+    const { data, error } = await supabase
+      .from('farmer_ledger')
+      .select('*')
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return data || [];
   }
 
-  // Create payout (PS-3)
   static async createPayout(farmerId, periodStart, periodEnd, totalEarnings, commissionAmount, bankDetails) {
     const netAmount = totalEarnings - commissionAmount;
-    const result = await pool.query(
-      `INSERT INTO farmer_payouts (farmer_id, payout_period_start, payout_period_end, total_earnings, commission_amount, net_amount, bank_account_number, bank_name, branch_code)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       RETURNING *`,
-      [farmerId, periodStart, periodEnd, totalEarnings, commissionAmount, netAmount, bankDetails.account_number, bankDetails.bank_name, bankDetails.branch_code]
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('farmer_payouts')
+      .insert([
+        {
+          farmer_id: farmerId,
+          payout_period_start: periodStart,
+          payout_period_end: periodEnd,
+          total_earnings: totalEarnings,
+          commission_amount: commissionAmount,
+          net_amount: netAmount,
+          bank_account_number: bankDetails.account_number,
+          bank_name: bankDetails.bank_name,
+          branch_code: bankDetails.branch_code,
+        },
+      ])
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Update payout status
   static async updatePayoutStatus(payoutId, status, transactionReference = null, payoutDate = null) {
-    const result = await pool.query(
-      `UPDATE farmer_payouts 
-       SET status = $1, transaction_reference = $2, payout_date = $3, updated_at = CURRENT_TIMESTAMP 
-       WHERE payout_id = $4
-       RETURNING *`,
-      [status, transactionReference, payoutDate, payoutId]
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('farmer_payouts')
+      .update({ status, transaction_reference: transactionReference || null, payout_date: payoutDate || null })
+      .eq('payout_id', payoutId)
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Get farmer payouts
   static async getFarmerPayouts(farmerId, limit = 50, offset = 0) {
-    const result = await pool.query(
-      `SELECT * FROM farmer_payouts 
-       WHERE farmer_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT $2 OFFSET $3`,
-      [farmerId, limit, offset]
-    );
-    return result.rows;
+    const { data, error } = await supabase
+      .from('farmer_payouts')
+      .select('*')
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (error) throw error;
+    return data || [];
   }
 
-  // COD Settings (PS-2)
   static async getCODSettings(farmerId) {
-    const result = await pool.query(
-      `SELECT * FROM cod_settings WHERE farmer_id = $1`,
-      [farmerId]
-    );
-    return result.rows[0] || null;
+    const { data, error } = await supabase
+      .from('cod_settings')
+      .select('*')
+      .eq('farmer_id', farmerId)
+      .limit(1);
+    if (error) throw error;
+    return (data && data[0]) || null;
   }
 
   static async updateCODSettings(farmerId, settings) {
-    const { is_enabled, min_order_amount, max_order_amount, allowed_areas } = settings;
-    const result = await pool.query(
-      `INSERT INTO cod_settings (farmer_id, is_enabled, min_order_amount, max_order_amount, allowed_areas)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (farmer_id) 
-       DO UPDATE SET 
-         is_enabled = EXCLUDED.is_enabled,
-         min_order_amount = EXCLUDED.min_order_amount,
-         max_order_amount = EXCLUDED.max_order_amount,
-         allowed_areas = EXCLUDED.allowed_areas,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [farmerId, is_enabled !== undefined ? is_enabled : true, min_order_amount || 0, max_order_amount || null, allowed_areas || null]
-    );
-    return result.rows[0];
+    const payload = {
+      farmer_id: farmerId,
+      is_enabled: settings.is_enabled !== undefined ? settings.is_enabled : true,
+      min_order_amount: settings.min_order_amount || 0,
+      max_order_amount: settings.max_order_amount || null,
+      allowed_areas: settings.allowed_areas || null,
+    };
+
+    const { data, error } = await supabase
+      .from('cod_settings')
+      .upsert(payload, { onConflict: 'farmer_id' })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // COD Eligibility (PS-2)
   static async checkCODEligibility(userId, orderAmount, farmerId = null) {
-    // Check user eligibility
-    const userEligibility = await pool.query(
-      `SELECT * FROM cod_eligibility WHERE user_id = $1`,
-      [userId]
-    );
-    
-    if (userEligibility.rows.length > 0) {
-      const eligibility = userEligibility.rows[0];
-      if (!eligibility.is_eligible) {
-        return { eligible: false, reason: eligibility.reason || 'User not eligible for COD' };
-      }
-      if (eligibility.max_order_value && parseFloat(orderAmount) > parseFloat(eligibility.max_order_value)) {
-        return { eligible: false, reason: `Order amount exceeds COD limit of ₱${eligibility.max_order_value}` };
+    const { data: elig } = await supabase
+      .from('cod_eligibility')
+      .select('*')
+      .eq('user_id', userId)
+      .limit(1);
+
+    if (elig && elig.length > 0) {
+      const e = elig[0];
+      if (!e.is_eligible) return { eligible: false, reason: e.reason || 'User not eligible for COD' };
+      if (e.max_order_value && parseFloat(orderAmount) > parseFloat(e.max_order_value)) {
+        return { eligible: false, reason: `Order amount exceeds COD limit of ₱${e.max_order_value}` };
       }
     }
 
-    // Check farmer COD settings if farmerId provided
     if (farmerId) {
-      const codSettings = await this.getCODSettings(farmerId);
-      if (codSettings && !codSettings.is_enabled) {
-        return { eligible: false, reason: 'Farmer does not accept COD' };
-      }
-      if (codSettings) {
-        if (codSettings.min_order_amount && parseFloat(orderAmount) < parseFloat(codSettings.min_order_amount)) {
-          return { eligible: false, reason: `Order amount must be at least ₱${codSettings.min_order_amount} for COD` };
+      const settings = await this.getCODSettings(farmerId);
+      if (settings && !settings.is_enabled) return { eligible: false, reason: 'Farmer does not accept COD' };
+      if (settings) {
+        if (settings.min_order_amount && parseFloat(orderAmount) < parseFloat(settings.min_order_amount)) {
+          return { eligible: false, reason: `Order amount must be at least ₱${settings.min_order_amount} for COD` };
         }
-        if (codSettings.max_order_amount && parseFloat(orderAmount) > parseFloat(codSettings.max_order_amount)) {
-          return { eligible: false, reason: `Order amount exceeds COD limit of ₱${codSettings.max_order_amount}` };
+        if (settings.max_order_amount && parseFloat(orderAmount) > parseFloat(settings.max_order_amount)) {
+          return { eligible: false, reason: `Order amount exceeds COD limit of ₱${settings.max_order_amount}` };
         }
       }
     }
@@ -286,109 +206,116 @@ class Payment {
   }
 
   static async updateCODEligibility(userId, eligibility) {
-    const { is_eligible, reason, max_order_value, restrictions } = eligibility;
-    const result = await pool.query(
-      `INSERT INTO cod_eligibility (user_id, is_eligible, reason, max_order_value, restrictions)
-       VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id) 
-       DO UPDATE SET 
-         is_eligible = EXCLUDED.is_eligible,
-         reason = EXCLUDED.reason,
-         max_order_value = EXCLUDED.max_order_value,
-         restrictions = EXCLUDED.restrictions,
-         updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [userId, is_eligible !== undefined ? is_eligible : true, reason || null, max_order_value || null, restrictions || null]
-    );
-    return result.rows[0];
+    const payload = {
+      user_id: userId,
+      is_eligible: eligibility.is_eligible !== undefined ? eligibility.is_eligible : true,
+      reason: eligibility.reason || null,
+      max_order_value: eligibility.max_order_value || null,
+      restrictions: eligibility.restrictions || null,
+    };
+
+    const { data, error } = await supabase
+      .from('cod_eligibility')
+      .upsert(payload, { onConflict: 'user_id' })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Commission Settings (for admin)
   static async getCommissionRate() {
-    const result = await pool.query(
-      `SELECT commission_rate, min_commission FROM commission_settings ORDER BY setting_id LIMIT 1`
-    );
-    return result.rows.length > 0 ? {
-      rate: parseFloat(result.rows[0].commission_rate) || 0.05,
-      minCommission: parseFloat(result.rows[0].min_commission) || 0
-    } : { rate: 0.05, minCommission: 0 };
+    const { data, error } = await supabase
+      .from('commission_settings')
+      .select('commission_rate, min_commission')
+      .order('setting_id', { ascending: true })
+      .limit(1);
+    if (error) throw error;
+    if (!data || data.length === 0) return { rate: 0.05, minCommission: 0 };
+    return { rate: parseFloat(data[0].commission_rate) || 0.05, minCommission: parseFloat(data[0].min_commission) || 0 };
   }
 
   static async updateCommissionRate(rate, minCommission = 0, updatedBy = null) {
-    const result = await pool.query(
-      `UPDATE commission_settings 
-       SET commission_rate = $1, min_commission = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP
-       WHERE setting_id = 1
-       RETURNING *`,
-      [rate, minCommission, updatedBy]
-    );
-    if (result.rows.length === 0) {
-      // Insert if not exists
-      const insertResult = await pool.query(
-        `INSERT INTO commission_settings (setting_id, commission_rate, min_commission, updated_by)
-         VALUES (1, $1, $2, $3)
-         RETURNING *`,
-        [rate, minCommission, updatedBy]
-      );
-      return insertResult.rows[0];
+    // Try update first
+    const { data, error } = await supabase
+      .from('commission_settings')
+      .update({ commission_rate: rate, min_commission: minCommission, updated_by: updatedBy })
+      .eq('setting_id', 1)
+      .select('*');
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      const { data: inserted, error: insErr } = await supabase
+        .from('commission_settings')
+        .insert([{ setting_id: 1, commission_rate: rate, min_commission: minCommission, updated_by: updatedBy }])
+        .select('*');
+      if (insErr) throw insErr;
+      return inserted && inserted[0];
     }
-    return result.rows[0];
+
+    return data[0];
   }
 
-  // Create payout request (farmer requests payout)
   static async requestPayout(farmerId, amount, bankDetails) {
     const currentBalance = await this.getFarmerBalance(farmerId);
-    
-    if (parseFloat(amount) > currentBalance) {
-      throw new Error('Requested amount exceeds available balance');
-    }
+    if (parseFloat(amount) > currentBalance) throw new Error('Requested amount exceeds available balance');
+    if (parseFloat(amount) <= 0) throw new Error('Payout amount must be greater than 0');
 
-    if (parseFloat(amount) <= 0) {
-      throw new Error('Payout amount must be greater than 0');
-    }
+    // Check existing pending
+    const { data: pending } = await supabase
+      .from('farmer_payouts')
+      .select('payout_id')
+      .eq('farmer_id', farmerId)
+      .eq('status', 'PENDING')
+      .limit(1);
+    if (pending && pending.length > 0) throw new Error('You already have a pending payout request');
 
-    // Check for existing pending payout
-    const existingPending = await pool.query(
-      `SELECT payout_id FROM farmer_payouts 
-       WHERE farmer_id = $1 AND status = 'PENDING' 
-       LIMIT 1`,
-      [farmerId]
-    );
-
-    if (existingPending.rows.length > 0) {
-      throw new Error('You already have a pending payout request');
-    }
-
-    const result = await pool.query(
-      `INSERT INTO farmer_payouts 
-       (farmer_id, payout_period_start, payout_period_end, total_earnings, commission_amount, net_amount, 
-        bank_account_number, bank_name, branch_code, status)
-       VALUES ($1, CURRENT_DATE, CURRENT_DATE, $2, 0, $2, $3, $4, $5, 'PENDING')
-       RETURNING *`,
-      [
-        farmerId,
-        parseFloat(amount),
-        bankDetails.account_number,
-        bankDetails.bank_name,
-        bankDetails.branch_code
-      ]
-    );
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('farmer_payouts')
+      .insert([
+        {
+          farmer_id: farmerId,
+          payout_period_start: new Date().toISOString().slice(0, 10),
+          payout_period_end: new Date().toISOString().slice(0, 10),
+          total_earnings: parseFloat(amount),
+          commission_amount: 0,
+          net_amount: parseFloat(amount),
+          bank_account_number: bankDetails.account_number,
+          bank_name: bankDetails.bank_name,
+          branch_code: bankDetails.branch_code,
+          status: 'PENDING',
+        },
+      ])
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Get payout by ID
   static async getPayoutById(payoutId) {
-    const result = await pool.query(
-      `SELECT fp.*, 
-        pr.farm_name, pr.full_name as farmer_name,
-        u.email as farmer_email
-       FROM farmer_payouts fp
-       LEFT JOIN profiles pr ON fp.farmer_id = pr.user_id
-       LEFT JOIN users u ON fp.farmer_id = u.user_id
-       WHERE fp.payout_id = $1`,
-      [payoutId]
-    );
-    return result.rows[0] || null;
+    const { data, error } = await supabase
+      .from('farmer_payouts')
+      .select('*, farmer_id')
+      .eq('payout_id', payoutId)
+      .single();
+    if (error) throw error;
+
+    const { data: pr } = await supabase
+      .from('profiles')
+      .select('farm_name, full_name')
+      .eq('user_id', data.farmer_id)
+      .single();
+    const { data: u } = await supabase
+      .from('users')
+      .select('email')
+      .eq('user_id', data.farmer_id)
+      .single();
+
+    return {
+      ...data,
+      farm_name: pr?.farm_name,
+      farmer_name: pr?.full_name,
+      farmer_email: u?.email,
+    };
   }
 }
 

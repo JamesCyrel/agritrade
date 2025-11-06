@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-const pool = require('./config/database');
+// const pool = require('./config/database'); // deprecated: using Supabase now
 const User = require('./models/User');
 const Consumer = require('./models/Consumer');
 const Product = require('./models/Product');
@@ -46,18 +46,19 @@ app.use('/api/consumer', consumerRoutes);
 // Initialize database tables
 const initializeDatabase = async () => {
   try {
-    await User.createTable();
-    await Consumer.createTables();
-    await Product.createTable();
-    await Cart.createTable();
-    await Order.createTable();
-    await Payment.createTable();
-    await Notification.createTable();
-    await Review.createTable();
-    await Dispute.createTable();
-    await HomepageContent.createTable();
-    console.log('✅ Database initialized successfully');
-    
+    console.log('ℹ️  Skipping runtime table initialization. Ensure schema is applied in Supabase.');
+    // await User.createTable();
+    // await Consumer.createTables();
+    // await Product.createTable();
+    // await Cart.createTable();
+    // await Order.createTable();
+    // await Payment.createTable();
+    // await Notification.createTable();
+    // await Review.createTable();
+    // await Dispute.createTable();
+    // await HomepageContent.createTable();
+    console.log('✅ Startup schema checks skipped');
+
     // Seed admin account if it doesn't exist
     await seedAdminAccount();
   } catch (error) {
@@ -119,8 +120,7 @@ const startServer = async () => {
       console.log(`   POST /api/auth/signup`);
       console.log(`   POST /api/auth/login`);
       console.log(`   GET  /api/auth/verify`);
-      console.log(`
-🔧 Farmer endpoints:`);
+      console.log(`\n🔧 Farmer endpoints:`);
       console.log(`   GET  /api/farmer/profile`);
       console.log(`   PUT  /api/farmer/profile`);
       console.log(`   POST /api/farmer/verification/documents`);

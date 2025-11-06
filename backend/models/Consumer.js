@@ -1,266 +1,309 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class Consumer {
-  // Create consumer-specific tables
   static async createTables() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS consumer_addresses (
-        address_id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-        label VARCHAR(100),
-        full_address TEXT NOT NULL,
-        city VARCHAR(100),
-        state VARCHAR(100),
-        postal_code VARCHAR(20),
-        is_default BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS consumer_payment_methods (
-        payment_id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-        payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('CARD', 'WALLET', 'UPI')),
-        card_number_last4 VARCHAR(4),
-        card_holder_name VARCHAR(255),
-        expiry_month INTEGER,
-        expiry_year INTEGER,
-        upi_id VARCHAR(255),
-        wallet_provider VARCHAR(50),
-        is_default BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS consumer_favorites (
-        favorite_id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        product_id INTEGER NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(user_id, product_id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON consumer_addresses(user_id);
-      CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON consumer_payment_methods(user_id);
-      CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON consumer_favorites(user_id);
-      CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON consumer_favorites(product_id);
-    `;
-
-    try {
-      await pool.query(query);
-      console.log('✅ Consumer tables created/verified');
-    } catch (error) {
-      console.error('❌ Error creating consumer tables:', error);
-      throw error;
-    }
+    console.log('ℹ️  Skipping runtime consumer table creation. Manage schema in Supabase.');
   }
 
-  // Get consumer profile
   static async getProfile(userId) {
-    const result = await pool.query(`
-      SELECT p.full_name, u.email, u.phone
-      FROM profiles p
-      JOIN users u ON u.user_id = p.user_id
-      WHERE p.user_id = $1
-    `, [userId]);
-    return result.rows[0] || null;
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('full_name, user_id')
+      .eq('user_id', userId)
+      .single();
+    if (error) throw error;
+
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('email, phone')
+      .eq('user_id', userId)
+      .single();
+    if (userError) throw userError;
+
+    return profile && user ? { full_name: profile.full_name, email: user.email, phone: user.phone } : null;
   }
 
-  // Update consumer profile (full_name)
   static async updateProfile(userId, fullName) {
-    const result = await pool.query(`
-      UPDATE profiles 
-      SET full_name = $2, updated_at = NOW()
-      WHERE user_id = $1
-      RETURNING full_name
-    `, [userId, fullName]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ full_name: fullName })
+      .eq('user_id', userId)
+      .select('full_name')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Address methods
   static async getAddresses(userId) {
-    const result = await pool.query(`
-      SELECT address_id, label, full_address, city, state, postal_code, is_default
-      FROM consumer_addresses
-      WHERE user_id = $1
-      ORDER BY is_default DESC, created_at DESC
-    `, [userId]);
-    return result.rows;
+    const { data, error } = await supabase
+      .from('consumer_addresses')
+      .select('address_id, label, full_address, city, state, postal_code, is_default, created_at')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   }
 
   static async addAddress(userId, addressData) {
     const { label, full_address, city, state, postal_code, is_default } = addressData;
-    
-    // If setting as default, unset other defaults
+
     if (is_default) {
-      await pool.query(`
-        UPDATE consumer_addresses SET is_default = FALSE WHERE user_id = $1
-      `, [userId]);
+      const { error: unsetError } = await supabase
+        .from('consumer_addresses')
+        .update({ is_default: false })
+        .eq('user_id', userId);
+      if (unsetError) throw unsetError;
     }
 
-    const result = await pool.query(`
-      INSERT INTO consumer_addresses (user_id, label, full_address, city, state, postal_code, is_default)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING address_id, label, full_address, city, state, postal_code, is_default
-    `, [userId, label || null, full_address, city || null, state || null, postal_code || null, is_default || false]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_addresses')
+      .insert([
+        {
+          user_id: userId,
+          label: label || null,
+          full_address,
+          city: city || null,
+          state: state || null,
+          postal_code: postal_code || null,
+          is_default: !!is_default,
+        },
+      ])
+      .select('address_id, label, full_address, city, state, postal_code, is_default')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async updateAddress(userId, addressId, addressData) {
     const { label, full_address, city, state, postal_code, is_default } = addressData;
-    
-    // If setting as default, unset other defaults
+
     if (is_default) {
-      await pool.query(`
-        UPDATE consumer_addresses SET is_default = FALSE WHERE user_id = $1 AND address_id != $2
-      `, [userId, addressId]);
+      const { error: unsetError } = await supabase
+        .from('consumer_addresses')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .neq('address_id', addressId);
+      if (unsetError) throw unsetError;
     }
 
-    const result = await pool.query(`
-      UPDATE consumer_addresses
-      SET label = $3, full_address = $4, city = $5, state = $6, postal_code = $7, is_default = $8, updated_at = NOW()
-      WHERE address_id = $2 AND user_id = $1
-      RETURNING address_id, label, full_address, city, state, postal_code, is_default
-    `, [userId, addressId, label || null, full_address, city || null, state || null, postal_code || null, is_default || false]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_addresses')
+      .update({
+        label: label || null,
+        full_address,
+        city: city || null,
+        state: state || null,
+        postal_code: postal_code || null,
+        is_default: !!is_default,
+      })
+      .eq('address_id', addressId)
+      .eq('user_id', userId)
+      .select('address_id, label, full_address, city, state, postal_code, is_default')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async deleteAddress(userId, addressId) {
-    const result = await pool.query(`
-      DELETE FROM consumer_addresses
-      WHERE address_id = $1 AND user_id = $2
-      RETURNING address_id
-    `, [addressId, userId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_addresses')
+      .delete()
+      .eq('address_id', addressId)
+      .eq('user_id', userId)
+      .select('address_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Payment methods
   static async getPaymentMethods(userId) {
-    const result = await pool.query(`
-      SELECT payment_id, payment_type, card_number_last4, card_holder_name, 
-             expiry_month, expiry_year, upi_id, wallet_provider, is_default
-      FROM consumer_payment_methods
-      WHERE user_id = $1
-      ORDER BY is_default DESC, created_at DESC
-    `, [userId]);
-    return result.rows;
+    const { data, error } = await supabase
+      .from('consumer_payment_methods')
+      .select('payment_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default, created_at')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
   }
 
   static async addPaymentMethod(userId, paymentData) {
     const { payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default } = paymentData;
-    
-    // If setting as default, unset other defaults
+
     if (is_default) {
-      await pool.query(`
-        UPDATE consumer_payment_methods SET is_default = FALSE WHERE user_id = $1
-      `, [userId]);
+      const { error: unsetError } = await supabase
+        .from('consumer_payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', userId);
+      if (unsetError) throw unsetError;
     }
 
-    const result = await pool.query(`
-      INSERT INTO consumer_payment_methods 
-        (user_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING payment_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default
-    `, [userId, payment_type, card_number_last4 || null, card_holder_name || null, expiry_month || null, expiry_year || null, upi_id || null, wallet_provider || null, is_default || false]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_payment_methods')
+      .insert([
+        {
+          user_id: userId,
+          payment_type,
+          card_number_last4: card_number_last4 || null,
+          card_holder_name: card_holder_name || null,
+          expiry_month: expiry_month || null,
+          expiry_year: expiry_year || null,
+          upi_id: upi_id || null,
+          wallet_provider: wallet_provider || null,
+          is_default: !!is_default,
+        },
+      ])
+      .select('payment_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async updatePaymentMethod(userId, paymentId, paymentData) {
     const { payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default } = paymentData;
-    
-    // If setting as default, unset other defaults
+
     if (is_default) {
-      await pool.query(`
-        UPDATE consumer_payment_methods SET is_default = FALSE WHERE user_id = $1 AND payment_id != $2
-      `, [userId, paymentId]);
+      const { error: unsetError } = await supabase
+        .from('consumer_payment_methods')
+        .update({ is_default: false })
+        .eq('user_id', userId)
+        .neq('payment_id', paymentId);
+      if (unsetError) throw unsetError;
     }
 
-    const result = await pool.query(`
-      UPDATE consumer_payment_methods
-      SET payment_type = $3, card_number_last4 = $4, card_holder_name = $5, 
-          expiry_month = $6, expiry_year = $7, upi_id = $8, wallet_provider = $9, 
-          is_default = $10, updated_at = NOW()
-      WHERE payment_id = $2 AND user_id = $1
-      RETURNING payment_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default
-    `, [userId, paymentId, payment_type, card_number_last4 || null, card_holder_name || null, expiry_month || null, expiry_year || null, upi_id || null, wallet_provider || null, is_default || false]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_payment_methods')
+      .update({
+        payment_type,
+        card_number_last4: card_number_last4 || null,
+        card_holder_name: card_holder_name || null,
+        expiry_month: expiry_month || null,
+        expiry_year: expiry_year || null,
+        upi_id: upi_id || null,
+        wallet_provider: wallet_provider || null,
+        is_default: !!is_default,
+      })
+      .eq('payment_id', paymentId)
+      .eq('user_id', userId)
+      .select('payment_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async deletePaymentMethod(userId, paymentId) {
-    const result = await pool.query(`
-      DELETE FROM consumer_payment_methods
-      WHERE payment_id = $1 AND user_id = $2
-      RETURNING payment_id
-    `, [paymentId, userId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_payment_methods')
+      .delete()
+      .eq('payment_id', paymentId)
+      .eq('user_id', userId)
+      .select('payment_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
-  // Favorites methods
   static async addFavorite(userId, productId) {
-    const result = await pool.query(`
-      INSERT INTO consumer_favorites (user_id, product_id)
-      VALUES ($1, $2)
-      ON CONFLICT (user_id, product_id) DO NOTHING
-      RETURNING favorite_id, user_id, product_id, created_at
-    `, [userId, productId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_favorites')
+      .insert([{ user_id: userId, product_id: productId }], { upsert: true })
+      .select('favorite_id, user_id, product_id, created_at')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async removeFavorite(userId, productId) {
-    const result = await pool.query(`
-      DELETE FROM consumer_favorites
-      WHERE user_id = $1 AND product_id = $2
-      RETURNING favorite_id
-    `, [userId, productId]);
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('consumer_favorites')
+      .delete()
+      .eq('user_id', userId)
+      .eq('product_id', productId)
+      .select('favorite_id')
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   static async getFavorites(userId) {
-    const result = await pool.query(`
-      SELECT 
-        f.favorite_id,
-        f.created_at as favorited_at,
-        p.product_id,
-        p.variety_name,
-        p.rice_type,
-        p.price_per_kg,
-        p.available_quantity,
-        p.quantity_unit,
-        p.description,
-        p.status,
-        pr.farm_name,
-        pr.full_name as farmer_name,
-        pr.user_id as farmer_id,
-        (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE product_id = p.product_id) as average_rating,
-        (SELECT COUNT(*) FROM reviews WHERE product_id = p.product_id) as total_reviews,
-        (
-          SELECT json_agg(image_url)
-          FROM (
-            SELECT pi.image_url
-            FROM product_images pi
-            WHERE pi.product_id = p.product_id
-            ORDER BY pi.image_order
-            LIMIT 5
-          ) sub
-        ) as images
-      FROM consumer_favorites f
-      INNER JOIN products p ON f.product_id = p.product_id
-      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
-      WHERE f.user_id = $1
-        AND p.status = 'ACTIVE'
-        AND pr.verification_status = 'APPROVED'
-      ORDER BY f.created_at DESC
-    `, [userId]);
-    return result.rows;
+    // Fetch favorite list
+    const { data: favorites, error } = await supabase
+      .from('consumer_favorites')
+      .select('favorite_id, created_at, product_id')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+
+    if (!favorites || favorites.length === 0) return [];
+    const productIds = favorites.map(f => f.product_id);
+
+    // Fetch products + images
+    const { data: products, error: prodError } = await supabase
+      .from('products')
+      .select('product_id, variety_name, rice_type, price_per_kg, available_quantity, quantity_unit, description, status, farmer_id')
+      .in('product_id', productIds)
+      .eq('status', 'ACTIVE');
+    if (prodError) throw prodError;
+
+    const { data: profiles, error: profError } = await supabase
+      .from('profiles')
+      .select('user_id, farm_name, full_name, verification_status')
+      .in('user_id', products.map(p => p.farmer_id));
+    if (profError) throw profError;
+
+    const { data: images, error: imgError } = await supabase
+      .from('product_images')
+      .select('product_id, image_url, image_order')
+      .in('product_id', productIds)
+      .order('image_order', { ascending: true });
+    if (imgError) throw imgError;
+
+    const productIdToImages = new Map();
+    for (const img of images || []) {
+      if (!productIdToImages.has(img.product_id)) productIdToImages.set(img.product_id, []);
+      productIdToImages.get(img.product_id).push(img.image_url);
+    }
+
+    const profileByUserId = new Map((profiles || []).map(p => [p.user_id, p]));
+    const productById = new Map((products || []).map(p => [p.product_id, p]));
+
+    return favorites
+      .map(f => {
+        const p = productById.get(f.product_id);
+        if (!p) return null;
+        const pr = profileByUserId.get(p.farmer_id);
+        if (!pr || pr.verification_status !== 'APPROVED') return null;
+        return {
+          favorite_id: f.favorite_id,
+          favorited_at: f.created_at,
+          product_id: p.product_id,
+          variety_name: p.variety_name,
+          rice_type: p.rice_type,
+          price_per_kg: p.price_per_kg,
+          available_quantity: p.available_quantity,
+          quantity_unit: p.quantity_unit,
+          description: p.description,
+          status: p.status,
+          farm_name: pr.farm_name,
+          farmer_name: pr.full_name,
+          farmer_id: p.farmer_id,
+          average_rating: 0,
+          total_reviews: 0,
+          images: productIdToImages.get(p.product_id) || [],
+        };
+      })
+      .filter(Boolean);
   }
 
   static async isFavorite(userId, productId) {
-    const result = await pool.query(`
-      SELECT favorite_id
-      FROM consumer_favorites
-      WHERE user_id = $1 AND product_id = $2
-    `, [userId, productId]);
-    return result.rows.length > 0;
+    const { count, error } = await supabase
+      .from('consumer_favorites')
+      .select('favorite_id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('product_id', productId);
+    if (error) throw error;
+    return (count || 0) > 0;
   }
 }
 
