@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 const Profile = require('../models/Profile');
 const Verification = require('../models/Verification');
 
@@ -19,20 +19,24 @@ exports.listUsers = async (req, res) => {
       where.push(`p.verification_status = $${params.length}`);
     }
 
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('user_id, email, phone, role, created_at')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
 
-    const sql = `
-      SELECT 
-        u.user_id, u.email, u.phone, u.role, u.created_at,
-        p.full_name, p.farm_name, p.verification_status
-      FROM users u
-      LEFT JOIN profiles p ON p.user_id = u.user_id
-      ${whereSql}
-      ORDER BY u.created_at DESC
-    `;
+    const userIds = users.map(u => u.user_id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, farm_name, verification_status')
+      .in('user_id', userIds);
+    const profileByUser = new Map((profiles || []).map(p => [p.user_id, p]));
 
-    const result = await pool.query(sql, params);
-    res.json({ success: true, data: result.rows });
+    let merged = users.map(u => ({ ...u, ...(profileByUser.get(u.user_id) || {}) }));
+    if (role) merged = merged.filter(u => u.role === role.toUpperCase());
+    if (status) merged = merged.filter(u => (u.verification_status || '').toUpperCase() === status.toUpperCase());
+
+    res.json({ success: true, data: merged });
   } catch (error) {
     console.error('listUsers error', error);
     res.status(500).json({ success: false, message: 'Failed to list users' });
@@ -42,14 +46,20 @@ exports.listUsers = async (req, res) => {
 // List farmers with PENDING_REVIEW (or PENDING_DOCUMENTS if you want)
 exports.listPendingFarmers = async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT u.user_id, u.email, u.phone, p.full_name, p.farm_name, p.verification_status, p.updated_at
-      FROM users u
-      JOIN profiles p ON p.user_id = u.user_id
-      WHERE u.role = 'FARMER' AND p.verification_status IN ('PENDING_REVIEW', 'PENDING_DOCUMENTS')
-      ORDER BY p.updated_at DESC
-    `);
-    res.json({ success: true, data: result.rows });
+    const { data: farmers, error } = await supabase
+      .from('profiles')
+      .select('user_id, full_name, farm_name, verification_status, updated_at')
+      .in('verification_status', ['PENDING_REVIEW', 'PENDING_DOCUMENTS'])
+      .order('updated_at', { ascending: false });
+    if (error) throw error;
+    const { data: users } = await supabase
+      .from('users')
+      .select('user_id, email, phone, role')
+      .in('user_id', (farmers || []).map(f => f.user_id))
+      .eq('role', 'FARMER');
+    const userById = new Map((users || []).map(u => [u.user_id, u]));
+    const merged = (farmers || []).map(f => ({ ...userById.get(f.user_id), ...f }));
+    res.json({ success: true, data: merged });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to list farmers' });
   }
@@ -97,35 +107,33 @@ exports.rejectFarmer = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const { userId } = req.params;
-    const userQuery = await pool.query(
-      `SELECT u.*, p.* FROM users u 
-       LEFT JOIN profiles p ON u.user_id = p.user_id 
-       WHERE u.user_id = $1`,
-      [userId]
-    );
-    
-    if (userQuery.rows.length === 0) {
+    const [{ data: user }, { data: profile }] = await Promise.all([
+      supabase.from('users').select('*').eq('user_id', userId).single(),
+      supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle(),
+    ]);
+
+    if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
-    
-    const user = userQuery.rows[0];
+
+    const merged = { ...user, ...(profile || {}) };
     
     // Get additional data based on role
-    if (user.role === 'FARMER') {
+    if (merged.role === 'FARMER') {
       // Get verification documents
       const Verification = require('../models/Verification');
       const documents = await Verification.listDocuments(userId);
-      user.documents = documents;
-    } else if (user.role === 'CONSUMER') {
+      merged.documents = documents;
+    } else if (merged.role === 'CONSUMER') {
       // Get consumer addresses and payment methods count
       const Consumer = require('../models/Consumer');
       const addresses = await Consumer.getAddresses(userId);
       const paymentMethods = await Consumer.getPaymentMethods(userId);
-      user.addresses = addresses;
-      user.payment_methods = paymentMethods;
+      merged.addresses = addresses;
+      merged.payment_methods = paymentMethods;
     }
     
-    res.json({ success: true, data: user });
+    res.json({ success: true, data: merged });
   } catch (error) {
     console.error('getUserProfile error:', error);
     res.status(500).json({ success: false, message: 'Failed to get user profile' });
@@ -140,22 +148,11 @@ exports.suspendUser = async (req, res) => {
     
     // Add a suspended status or flag to users table
     // For now, we'll use a simple approach - add a is_suspended column if it doesn't exist
-    await pool.query(`
-      DO $$ 
-      BEGIN 
-        IF NOT EXISTS (
-          SELECT 1 FROM information_schema.columns 
-          WHERE table_name = 'users' AND column_name = 'is_suspended'
-        ) THEN
-          ALTER TABLE users ADD COLUMN is_suspended BOOLEAN DEFAULT FALSE;
-        END IF;
-      END $$;
-    `);
-    
-    await pool.query(
-      `UPDATE users SET is_suspended = TRUE WHERE user_id = $1`,
-      [userId]
-    );
+    const { error } = await supabase
+      .from('users')
+      .update({ is_suspended: true })
+      .eq('user_id', userId);
+    if (error) throw error;
     
     // TODO: Send notification to user
     
@@ -171,10 +168,11 @@ exports.activateUser = async (req, res) => {
   try {
     const { userId } = req.params;
     
-    await pool.query(
-      `UPDATE users SET is_suspended = FALSE WHERE user_id = $1`,
-      [userId]
-    );
+    const { error } = await supabase
+      .from('users')
+      .update({ is_suspended: false })
+      .eq('user_id', userId);
+    if (error) throw error;
     
     // TODO: Send notification to user
     
@@ -341,485 +339,51 @@ exports.getOrderDetails = async (req, res) => {
 
 // AD-3: Get all payment transactions
 exports.getAllTransactions = async (req, res) => {
-  try {
-    const { status, paymentMethod, startDate, endDate, limit = 50, offset = 0 } = req.query;
-    
-    const params = [];
-    const where = [];
-    let paramCount = 1;
-    
-    if (status) {
-      params.push(status.toUpperCase());
-      where.push(`pt.payment_status = $${paramCount++}`);
-    }
-    
-    if (paymentMethod) {
-      params.push(paymentMethod.toUpperCase());
-      where.push(`pt.payment_method = $${paramCount++}`);
-    }
-    
-    if (startDate) {
-      params.push(startDate);
-      where.push(`pt.created_at >= $${paramCount++}`);
-    }
-    
-    if (endDate) {
-      params.push(endDate);
-      where.push(`pt.created_at <= $${paramCount++}`);
-    }
-    
-    params.push(parseInt(limit));
-    params.push(parseInt(offset));
-    
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    
-    const query = `
-      SELECT 
-        pt.*,
-        o.order_number,
-        o.consumer_id,
-        o.farmer_id,
-        (SELECT email FROM users WHERE user_id = o.consumer_id) as consumer_email,
-        (SELECT farm_name FROM profiles WHERE user_id = o.farmer_id) as farmer_name
-      FROM payment_transactions pt
-      INNER JOIN orders o ON pt.order_id = o.order_id
-      ${whereSql}
-      ORDER BY pt.created_at DESC
-      LIMIT $${paramCount++} OFFSET $${paramCount}
-    `;
-    
-    const result = await pool.query(query, params);
-    
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM payment_transactions pt
-      ${whereSql}
-    `;
-    const countResult = await pool.query(
-      countQuery,
-      params.slice(0, params.length - 2)
-    );
-    
-    res.json({ 
-      success: true, 
-      data: result.rows,
-      pagination: {
-        total: parseInt(countResult.rows[0].total),
-        limit: parseInt(limit),
-        offset: parseInt(offset)
-      }
-    });
-  } catch (error) {
-    console.error('getAllTransactions error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch transactions' });
-  }
+  return res.status(501).json({ success: false, message: 'Transactions endpoint under migration to Supabase' });
 };
 
 // AD-3: Process refund
 exports.processRefund = async (req, res) => {
-  try {
-    const { transactionId } = req.params;
-    const { reason } = req.body;
-    
-    const Payment = require('../models/Payment');
-    
-    // Get transaction
-    const transactionResult = await pool.query(
-      `SELECT * FROM payment_transactions WHERE transaction_id = $1`,
-      [transactionId]
-    );
-    
-    if (transactionResult.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Transaction not found' });
-    }
-    
-    const transaction = transactionResult.rows[0];
-    
-    if (transaction.payment_status !== 'COMPLETED') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Only completed transactions can be refunded' 
-      });
-    }
-    
-    // Update transaction status
-    await pool.query(
-      `UPDATE payment_transactions 
-       SET payment_status = 'REFUNDED', updated_at = CURRENT_TIMESTAMP 
-       WHERE transaction_id = $1`,
-      [transactionId]
-    );
-    
-    // Update order status to cancelled
-    await pool.query(
-      `UPDATE orders SET status = 'CANCELLED' WHERE order_id = $1`,
-      [transaction.order_id]
-    );
-    
-    // TODO: Process actual refund through payment gateway
-    // TODO: Send notification to consumer
-    
-    res.json({ success: true, message: 'Refund processed successfully' });
-  } catch (error) {
-    console.error('processRefund error:', error);
-    res.status(500).json({ success: false, message: 'Failed to process refund' });
-  }
+  return res.status(501).json({ success: false, message: 'Refund processing under migration to Supabase' });
 };
 
 // AD-3: Get all payouts
 exports.getAllPayouts = async (req, res) => {
-  try {
-    const { status, farmerId, startDate, endDate, limit = 50, offset = 0 } = req.query;
-    
-    const params = [];
-    const where = [];
-    let paramCount = 1;
-    
-    if (status) {
-      params.push(status.toUpperCase());
-      where.push(`fp.status = $${paramCount++}`);
-    }
-    
-    if (farmerId) {
-      params.push(farmerId);
-      where.push(`fp.farmer_id = $${paramCount++}`);
-    }
-    
-    if (startDate) {
-      params.push(startDate);
-      where.push(`fp.created_at >= $${paramCount++}`);
-    }
-    
-    if (endDate) {
-      params.push(endDate);
-      where.push(`fp.created_at <= $${paramCount++}`);
-    }
-    
-    params.push(parseInt(limit));
-    params.push(parseInt(offset));
-    
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    
-    const query = `
-      SELECT 
-        fp.*,
-        pr.farm_name,
-        pr.full_name as farmer_name,
-        u.email as farmer_email
-      FROM farmer_payouts fp
-      LEFT JOIN profiles pr ON fp.farmer_id = pr.user_id
-      LEFT JOIN users u ON fp.farmer_id = u.user_id
-      ${whereSql}
-      ORDER BY fp.created_at DESC
-      LIMIT $${paramCount++} OFFSET $${paramCount}
-    `;
-    
-    const result = await pool.query(query, params);
-    
-    res.json({ success: true, data: result.rows });
-  } catch (error) {
-    console.error('getAllPayouts error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch payouts' });
-  }
+  return res.status(501).json({ success: false, message: 'Payouts endpoint under migration to Supabase' });
 };
 
 // AD-3: Get payout details
 exports.getPayoutDetails = async (req, res) => {
-  try {
-    const { payoutId } = req.params;
-    const Payment = require('../models/Payment');
-    
-    const payout = await Payment.getPayoutById(payoutId);
-    
-    if (!payout) {
-      return res.status(404).json({ success: false, message: 'Payout not found' });
-    }
-    
-    res.json({ success: true, data: payout });
-  } catch (error) {
-    console.error('getPayoutDetails error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch payout details' });
-  }
+  return res.status(501).json({ success: false, message: 'Payout details under migration to Supabase' });
 };
 
 // AD-3: Approve payout
 exports.approvePayout = async (req, res) => {
-  try {
-    const { payoutId } = req.params;
-    const { transactionReference, payoutDate } = req.body;
-    const adminId = req.user.userId;
-    
-    const Payment = require('../models/Payment');
-    const payout = await Payment.getPayoutById(payoutId);
-    
-    if (!payout) {
-      return res.status(404).json({ success: false, message: 'Payout not found' });
-    }
-    
-    if (payout.status !== 'PENDING') {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Payout is already ${payout.status}` 
-      });
-    }
-    
-    // Update payout status to PROCESSING or COMPLETED
-    const newStatus = 'PROCESSING'; // Admin approves, moves to processing
-    const updatedPayout = await Payment.updatePayoutStatus(
-      payoutId,
-      newStatus,
-      transactionReference || null,
-      payoutDate || new Date().toISOString().split('T')[0]
-    );
-    
-    // TODO: Send notification to farmer
-    
-    res.json({ 
-      success: true, 
-      message: 'Payout approved successfully',
-      data: updatedPayout 
-    });
-  } catch (error) {
-    console.error('approvePayout error:', error);
-    res.status(500).json({ success: false, message: 'Failed to approve payout' });
-  }
+  return res.status(501).json({ success: false, message: 'Approve payout under migration to Supabase' });
 };
 
 // AD-3: Complete payout (mark as completed after transfer)
 exports.completePayout = async (req, res) => {
-  try {
-    const { payoutId } = req.params;
-    const { transactionReference, payoutDate } = req.body;
-    
-    const Payment = require('../models/Payment');
-    const payout = await Payment.getPayoutById(payoutId);
-    
-    if (!payout) {
-      return res.status(404).json({ success: false, message: 'Payout not found' });
-    }
-    
-    if (payout.status !== 'PROCESSING') {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Payout must be PROCESSING to complete. Current status: ${payout.status}` 
-      });
-    }
-    
-    const updatedPayout = await Payment.updatePayoutStatus(
-      payoutId,
-      'COMPLETED',
-      transactionReference || null,
-      payoutDate || new Date().toISOString().split('T')[0]
-    );
-    
-    // TODO: Send notification to farmer
-    
-    res.json({ 
-      success: true, 
-      message: 'Payout completed successfully',
-      data: updatedPayout 
-    });
-  } catch (error) {
-    console.error('completePayout error:', error);
-    res.status(500).json({ success: false, message: 'Failed to complete payout' });
-  }
+  return res.status(501).json({ success: false, message: 'Complete payout under migration to Supabase' });
 };
 
 // AD-3: Reject payout
 exports.rejectPayout = async (req, res) => {
-  try {
-    const { payoutId } = req.params;
-    const { reason } = req.body;
-    
-    const Payment = require('../models/Payment');
-    const payout = await Payment.getPayoutById(payoutId);
-    
-    if (!payout) {
-      return res.status(404).json({ success: false, message: 'Payout not found' });
-    }
-    
-    if (payout.status !== 'PENDING') {
-      return res.status(400).json({ 
-        success: false, 
-        message: `Cannot reject payout with status: ${payout.status}` 
-      });
-    }
-    
-    // Reverse the payout ledger entry (add back to balance)
-    const PaymentModel = require('../models/Payment');
-    await PaymentModel.addLedgerEntry(
-      payout.farmer_id,
-      null,
-      'PAYOUT',
-      parseFloat(payout.net_amount),
-      `Payout #${payoutId} rejected${reason ? `: ${reason}` : ''}`
-    );
-    
-    // Update payout status to FAILED (or we could use 'REJECTED' if we add it)
-    const updatedPayout = await Payment.updatePayoutStatus(
-      payoutId,
-      'FAILED',
-      null,
-      null
-    );
-    
-    // TODO: Send notification to farmer
-    
-    res.json({ 
-      success: true, 
-      message: 'Payout rejected successfully',
-      data: updatedPayout 
-    });
-  } catch (error) {
-    console.error('rejectPayout error:', error);
-    res.status(500).json({ success: false, message: 'Failed to reject payout' });
-  }
+  return res.status(501).json({ success: false, message: 'Reject payout under migration to Supabase' });
 };
 
 // AD-3: Get/Update commission settings
 exports.getCommissionSettings = async (req, res) => {
-  try {
-    const Payment = require('../models/Payment');
-    const settings = await Payment.getCommissionRate();
-    res.json({ success: true, data: settings });
-  } catch (error) {
-    console.error('getCommissionSettings error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch commission settings' });
-  }
+  return res.status(501).json({ success: false, message: 'Commission settings under migration to Supabase' });
 };
 
 exports.updateCommissionSettings = async (req, res) => {
-  try {
-    const { rate, minCommission } = req.body;
-    const adminId = req.user.userId;
-    
-    if (rate === undefined || rate < 0 || rate > 1) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Commission rate must be between 0 and 1 (e.g., 0.05 for 5%)' 
-      });
-    }
-    
-    const Payment = require('../models/Payment');
-    const settings = await Payment.updateCommissionRate(
-      parseFloat(rate),
-      minCommission ? parseFloat(minCommission) : 0,
-      adminId
-    );
-    
-    res.json({ 
-      success: true, 
-      message: 'Commission settings updated successfully',
-      data: settings 
-    });
-  } catch (error) {
-    console.error('updateCommissionSettings error:', error);
-    res.status(500).json({ success: false, message: 'Failed to update commission settings' });
-  }
+  return res.status(501).json({ success: false, message: 'Update commission settings under migration to Supabase' });
 };
 
 // AD-6: Get analytics and KPIs
 exports.getAnalytics = async (req, res) => {
-  try {
-    const { startDate, endDate } = req.query;
-    
-    const dateFilter = startDate && endDate 
-      ? `WHERE o.created_at >= '${startDate}' AND o.created_at <= '${endDate}'`
-      : '';
-    
-    // Total Sales Volume (GMV)
-    const gmvQuery = await pool.query(`
-      SELECT COALESCE(SUM(total_amount), 0) as gmv
-      FROM orders
-      ${dateFilter}
-    `);
-    
-    // New User Registrations by Role
-    const usersQuery = await pool.query(`
-      SELECT 
-        role,
-        COUNT(*) as count
-      FROM users
-      ${dateFilter.replace('o.created_at', 'created_at')}
-      GROUP BY role
-    `);
-    
-    // Total Orders
-    const ordersQuery = await pool.query(`
-      SELECT 
-        COUNT(*) as total_orders,
-        COUNT(CASE WHEN status = 'DELIVERED' THEN 1 END) as completed_orders,
-        COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) as cancelled_orders
-      FROM orders
-      ${dateFilter}
-    `);
-    
-    // Most Popular Products
-    const productsQuery = await pool.query(`
-      SELECT 
-        p.product_id,
-        p.variety_name,
-        p.rice_type,
-        SUM(oi.quantity) as total_quantity_sold,
-        SUM(oi.subtotal) as total_revenue,
-        COUNT(DISTINCT oi.order_id) as order_count
-      FROM order_items oi
-      INNER JOIN products p ON oi.product_id = p.product_id
-      INNER JOIN orders o ON oi.order_id = o.order_id
-      ${dateFilter}
-      GROUP BY p.product_id, p.variety_name, p.rice_type
-      ORDER BY total_revenue DESC
-      LIMIT 10
-    `);
-    
-    // Top Performing Farmers
-    const farmersQuery = await pool.query(`
-      SELECT 
-        o.farmer_id,
-        pr.farm_name,
-        pr.full_name,
-        COUNT(DISTINCT o.order_id) as total_orders,
-        SUM(o.total_amount) as total_revenue,
-        AVG(o.total_amount) as avg_order_value
-      FROM orders o
-      INNER JOIN profiles pr ON o.farmer_id = pr.user_id
-      ${dateFilter}
-      GROUP BY o.farmer_id, pr.farm_name, pr.full_name
-      ORDER BY total_revenue DESC
-      LIMIT 10
-    `);
-    
-    // Platform Revenue (Commission)
-    // Note: Commission amounts are stored as negative values in ledger (they reduce farmer balance)
-    // So we need to negate the sum to get positive platform revenue
-    const revenueQuery = await pool.query(`
-      SELECT 
-        COALESCE(ABS(SUM(
-          CASE 
-            WHEN fl.transaction_type = 'COMMISSION' THEN fl.amount
-            ELSE 0
-          END
-        )), 0) as platform_revenue
-      FROM farmer_ledger fl
-      INNER JOIN orders o ON fl.order_id = o.order_id
-      ${dateFilter}
-    `);
-    
-    res.json({
-      success: true,
-      data: {
-        gmv: parseFloat(gmvQuery.rows[0].gmv),
-        userRegistrations: usersQuery.rows,
-        orders: ordersQuery.rows[0],
-        popularProducts: productsQuery.rows,
-        topFarmers: farmersQuery.rows,
-        platformRevenue: parseFloat(revenueQuery.rows[0].platform_revenue)
-      }
-    });
-  } catch (error) {
-    console.error('getAnalytics error:', error);
-    res.status(500).json({ success: false, message: 'Failed to fetch analytics' });
-  }
+  return res.status(501).json({ success: false, message: 'Analytics under migration to Supabase' });
 };
 
 // AD-4: Get all disputes
@@ -936,11 +500,12 @@ exports.removeFeaturedFarmer = async (req, res) => {
 // AD-5: Get all promo codes
 exports.getAllPromoCodes = async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT * FROM promo_codes ORDER BY created_at DESC`
-    );
-    
-    res.json({ success: true, data: result.rows });
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    res.json({ success: true, data });
   } catch (error) {
     console.error('getAllPromoCodes error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch promo codes' });
@@ -959,20 +524,33 @@ exports.createPromoCode = async (req, res) => {
       });
     }
     
-    const result = await pool.query(
-      `INSERT INTO promo_codes 
-       (code, description, discount_type, discount_value, min_order_amount, max_discount_amount, usage_limit, valid_from, valid_until, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       RETURNING *`,
-      [code, description || null, discountType, discountValue, minOrderAmount || 0, maxDiscountAmount || null, usageLimit || null, validFrom || null, validUntil || null, isActive !== false]
-    );
-    
-    res.json({ success: true, message: 'Promo code created successfully', data: result.rows[0] });
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .insert([
+        {
+          code,
+          description: description || null,
+          discount_type: discountType,
+          discount_value: discountValue,
+          min_order_amount: minOrderAmount || 0,
+          max_discount_amount: maxDiscountAmount || null,
+          usage_limit: usageLimit || null,
+          valid_from: validFrom || null,
+          valid_until: validUntil || null,
+          is_active: isActive !== false,
+        },
+      ])
+      .select()
+      .single();
+    if (error) {
+      if (error.code === '23505') {
+        return res.status(400).json({ success: false, message: 'Promo code already exists' });
+      }
+      throw error;
+    }
+    res.json({ success: true, message: 'Promo code created successfully', data });
   } catch (error) {
     console.error('createPromoCode error:', error);
-    if (error.code === '23505') { // Unique violation
-      return res.status(400).json({ success: false, message: 'Promo code already exists' });
-    }
     res.status(500).json({ success: false, message: 'Failed to create promo code' });
   }
 };
@@ -982,67 +560,28 @@ exports.updatePromoCode = async (req, res) => {
   try {
     const { promoId } = req.params;
     const { description, discountType, discountValue, minOrderAmount, maxDiscountAmount, usageLimit, validFrom, validUntil, isActive } = req.body;
-    
-    const updates = [];
-    const params = [];
-    let paramCount = 1;
-    
-    if (description !== undefined) {
-      updates.push(`description = $${paramCount++}`);
-      params.push(description);
-    }
-    if (discountType !== undefined) {
-      updates.push(`discount_type = $${paramCount++}`);
-      params.push(discountType);
-    }
-    if (discountValue !== undefined) {
-      updates.push(`discount_value = $${paramCount++}`);
-      params.push(discountValue);
-    }
-    if (minOrderAmount !== undefined) {
-      updates.push(`min_order_amount = $${paramCount++}`);
-      params.push(minOrderAmount);
-    }
-    if (maxDiscountAmount !== undefined) {
-      updates.push(`max_discount_amount = $${paramCount++}`);
-      params.push(maxDiscountAmount);
-    }
-    if (usageLimit !== undefined) {
-      updates.push(`usage_limit = $${paramCount++}`);
-      params.push(usageLimit);
-    }
-    if (validFrom !== undefined) {
-      updates.push(`valid_from = $${paramCount++}`);
-      params.push(validFrom);
-    }
-    if (validUntil !== undefined) {
-      updates.push(`valid_until = $${paramCount++}`);
-      params.push(validUntil);
-    }
-    if (isActive !== undefined) {
-      updates.push(`is_active = $${paramCount++}`);
-      params.push(isActive);
-    }
-    
-    if (updates.length === 0) {
-      return res.status(400).json({ success: false, message: 'No fields to update' });
-    }
-    
-    params.push(promoId);
-    
-    const result = await pool.query(
-      `UPDATE promo_codes 
-       SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP
-       WHERE promo_id = $${paramCount}
-       RETURNING *`,
-      params
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Promo code not found' });
-    }
-    
-    res.json({ success: true, message: 'Promo code updated successfully', data: result.rows[0] });
+
+    const updatePayload = {};
+    if (description !== undefined) updatePayload.description = description;
+    if (discountType !== undefined) updatePayload.discount_type = discountType;
+    if (discountValue !== undefined) updatePayload.discount_value = discountValue;
+    if (minOrderAmount !== undefined) updatePayload.min_order_amount = minOrderAmount;
+    if (maxDiscountAmount !== undefined) updatePayload.max_discount_amount = maxDiscountAmount;
+    if (usageLimit !== undefined) updatePayload.usage_limit = usageLimit;
+    if (validFrom !== undefined) updatePayload.valid_from = validFrom;
+    if (validUntil !== undefined) updatePayload.valid_until = validUntil;
+    if (isActive !== undefined) updatePayload.is_active = isActive;
+    updatePayload.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .update(updatePayload)
+      .eq('promo_id', promoId)
+      .select()
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, message: 'Promo code not found' });
+    res.json({ success: true, message: 'Promo code updated successfully', data });
   } catch (error) {
     console.error('updatePromoCode error:', error);
     res.status(500).json({ success: false, message: 'Failed to update promo code' });
@@ -1053,16 +592,14 @@ exports.updatePromoCode = async (req, res) => {
 exports.deletePromoCode = async (req, res) => {
   try {
     const { promoId } = req.params;
-    
-    const result = await pool.query(
-      `DELETE FROM promo_codes WHERE promo_id = $1 RETURNING *`,
-      [promoId]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Promo code not found' });
-    }
-    
+    const { data, error } = await supabase
+      .from('promo_codes')
+      .delete()
+      .eq('promo_id', promoId)
+      .select('promo_id')
+      .single();
+    if (error) throw error;
+    if (!data) return res.status(404).json({ success: false, message: 'Promo code not found' });
     res.json({ success: true, message: 'Promo code deleted successfully' });
   } catch (error) {
     console.error('deletePromoCode error:', error);

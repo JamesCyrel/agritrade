@@ -1,52 +1,33 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class Dispute {
   // Create disputes table (AD-4)
   static async createTable() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS disputes (
-        dispute_id SERIAL PRIMARY KEY,
-        order_id INTEGER REFERENCES orders(order_id) ON DELETE SET NULL,
-        reported_by INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        reported_against INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
-        dispute_type VARCHAR(50) NOT NULL CHECK (dispute_type IN ('PRODUCT_QUALITY', 'DELIVERY_ISSUE', 'PAYMENT', 'OTHER')),
-        subject VARCHAR(255) NOT NULL,
-        description TEXT NOT NULL,
-        status VARCHAR(20) DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED', 'CLOSED')),
-        admin_notes TEXT,
-        resolution TEXT,
-        resolved_by INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
-        resolved_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_disputes_order_id ON disputes(order_id);
-      CREATE INDEX IF NOT EXISTS idx_disputes_reported_by ON disputes(reported_by);
-      CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
-    `;
-
-    try {
-      await pool.query(query);
-      console.log('✅ Dispute tables created/verified');
-    } catch (error) {
-      console.error('❌ Error creating dispute tables:', error);
-      throw error;
-    }
+    // Schema migrations are managed via Supabase. No-op here.
+    console.log('ℹ️  Dispute.createTable skipped (managed in Supabase)');
   }
 
   // Create a dispute ticket
   static async createDispute(disputeData) {
     const { orderId, reportedBy, reportedAgainst, disputeType, subject, description } = disputeData;
     
-    const result = await pool.query(
-      `INSERT INTO disputes (order_id, reported_by, reported_against, dispute_type, subject, description)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING *`,
-      [orderId || null, reportedBy, reportedAgainst || null, disputeType, subject, description]
-    );
-    
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('disputes')
+      .insert([
+        {
+          order_id: orderId || null,
+          reported_by: reportedBy,
+          reported_against: reportedAgainst || null,
+          dispute_type: disputeType,
+          subject,
+          description,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 
   // Get all disputes with filters
@@ -95,31 +76,93 @@ class Dispute {
       LIMIT $${paramCount++} OFFSET $${paramCount}
     `;
 
-    const result = await pool.query(query, params);
-    return result.rows;
+    // Fetch base disputes
+    const { data, error } = await supabase
+      .from('disputes')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    // Apply in-memory filters not captured in base query
+    let filtered = data;
+    if (status) filtered = filtered.filter((d) => d.status === status);
+    if (disputeType) filtered = filtered.filter((d) => d.dispute_type === disputeType);
+    if (reportedBy) filtered = filtered.filter((d) => d.reported_by === reportedBy);
+
+    // Enrich with related fields
+    const enriched = await Promise.all(
+      filtered.map(async (d) => {
+        const [{ data: order }, { data: reporter }, { data: against }, { data: resolver }] = await Promise.all([
+          supabase.from('orders').select('order_number').eq('order_id', d.order_id).maybeSingle(),
+          supabase.from('users').select('email').eq('user_id', d.reported_by).maybeSingle(),
+          d.reported_against
+            ? supabase.from('users').select('email').eq('user_id', d.reported_against).maybeSingle()
+            : Promise.resolve({ data: null }),
+          d.resolved_by
+            ? supabase.from('users').select('email').eq('user_id', d.resolved_by).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+
+        const [{ data: reporterProfile }, { data: againstProfile }] = await Promise.all([
+          supabase.from('profiles').select('full_name').eq('user_id', d.reported_by).maybeSingle(),
+          d.reported_against
+            ? supabase.from('profiles').select('full_name').eq('user_id', d.reported_against).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+
+        return {
+          ...d,
+          order_number: order?.order_number || null,
+          reported_by_email: reporter?.email || null,
+          reported_by_name: reporterProfile?.full_name || null,
+          reported_against_email: against?.email || null,
+          reported_against_name: againstProfile?.full_name || null,
+          resolved_by_email: resolver?.email || null,
+        };
+      })
+    );
+
+    return enriched;
   }
 
   // Get dispute by ID
   static async getDisputeById(disputeId) {
-    const result = await pool.query(
-      `SELECT 
-        d.*,
-        o.order_number,
-        u1.email as reported_by_email,
-        (SELECT full_name FROM profiles WHERE user_id = d.reported_by) as reported_by_name,
-        u2.email as reported_against_email,
-        (SELECT full_name FROM profiles WHERE user_id = d.reported_against) as reported_against_name,
-        u3.email as resolved_by_email
-      FROM disputes d
-      LEFT JOIN orders o ON d.order_id = o.order_id
-      LEFT JOIN users u1 ON d.reported_by = u1.user_id
-      LEFT JOIN users u2 ON d.reported_against = d.reported_against
-      LEFT JOIN users u3 ON d.resolved_by = u3.user_id
-      WHERE d.dispute_id = $1`,
-      [disputeId]
-    );
-    
-    return result.rows[0] || null;
+    const { data: d, error } = await supabase
+      .from('disputes')
+      .select('*')
+      .eq('dispute_id', disputeId)
+      .single();
+    if (error) throw error;
+
+    const [{ data: order }, { data: reporter }, { data: against }, { data: resolver }] = await Promise.all([
+      supabase.from('orders').select('order_number').eq('order_id', d.order_id).maybeSingle(),
+      supabase.from('users').select('email').eq('user_id', d.reported_by).maybeSingle(),
+      d.reported_against
+        ? supabase.from('users').select('email').eq('user_id', d.reported_against).maybeSingle()
+        : Promise.resolve({ data: null }),
+      d.resolved_by
+        ? supabase.from('users').select('email').eq('user_id', d.resolved_by).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    const [{ data: reporterProfile }, { data: againstProfile }] = await Promise.all([
+      supabase.from('profiles').select('full_name').eq('user_id', d.reported_by).maybeSingle(),
+      d.reported_against
+        ? supabase.from('profiles').select('full_name').eq('user_id', d.reported_against).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+    return {
+      ...d,
+      order_number: order?.order_number || null,
+      reported_by_email: reporter?.email || null,
+      reported_by_name: reporterProfile?.full_name || null,
+      reported_against_email: against?.email || null,
+      reported_against_name: againstProfile?.full_name || null,
+      resolved_by_email: resolver?.email || null,
+    };
   }
 
   // Update dispute status and add admin notes
@@ -164,8 +207,27 @@ class Dispute {
       RETURNING *
     `;
 
-    const result = await pool.query(query, params);
-    return result.rows[0];
+    const updatePayload = {};
+    if (status !== undefined) updatePayload.status = status;
+    if (adminNotes !== undefined) updatePayload.admin_notes = adminNotes;
+    if (resolution !== undefined) updatePayload.resolution = resolution;
+    if (resolvedBy !== undefined) {
+      updatePayload.resolved_by = resolvedBy;
+      if (status === 'RESOLVED' || status === 'CLOSED') {
+        updatePayload.resolved_at = new Date().toISOString();
+      }
+    }
+
+    updatePayload.updated_at = new Date().toISOString();
+
+    const { data, error } = await supabase
+      .from('disputes')
+      .update(updatePayload)
+      .eq('dispute_id', disputeId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 }
 

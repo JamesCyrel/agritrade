@@ -3,7 +3,7 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const Consumer = require('../models/Consumer');
 const Payment = require('../models/Payment');
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 const Notification = require('../models/Notification');
 
 // OC-3: Create order from cart (Checkout)
@@ -81,25 +81,27 @@ exports.createOrder = async (req, res) => {
       // Calculate delivery fee based on distance (OM-7)
       let deliveryFee = 50; // Default fallback
       try {
-        // Get farmer location from profile
-        const farmerLocationResult = await pool.query(
-          `SELECT latitude, longitude FROM profiles WHERE user_id = $1`,
-          [parseInt(farmerId)]
-        );
-        
-        // Get consumer delivery address location
-        const addressResult = await pool.query(
-          `SELECT latitude, longitude FROM consumer_addresses WHERE address_id = $1`,
-          [deliveryAddressId]
-        );
-        
-        if (farmerLocationResult.rows[0]?.latitude && addressResult.rows[0]?.latitude) {
+        // Get farmer location from profile via Supabase
+        const { data: farmerProfile, error: farmerErr } = await supabase
+          .from('profiles')
+          .select('latitude, longitude')
+          .eq('user_id', parseInt(farmerId))
+          .single();
+
+        // Get consumer delivery address location via Supabase
+        const { data: address, error: addrErr } = await supabase
+          .from('consumer_addresses')
+          .select('latitude, longitude')
+          .eq('address_id', deliveryAddressId)
+          .single();
+
+        if (!farmerErr && !addrErr && farmerProfile?.latitude && address?.latitude) {
           const Notification = require('../models/Notification');
           deliveryFee = await Notification.calculateDeliveryFee(
-            farmerLocationResult.rows[0].latitude,
-            farmerLocationResult.rows[0].longitude,
-            addressResult.rows[0].latitude,
-            addressResult.rows[0].longitude
+            farmerProfile.latitude,
+            farmerProfile.longitude,
+            address.latitude,
+            address.longitude
           );
         }
       } catch (error) {

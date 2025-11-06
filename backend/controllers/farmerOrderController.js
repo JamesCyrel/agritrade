@@ -1,6 +1,5 @@
 const Order = require('../models/Order');
 const Notification = require('../models/Notification');
-const pool = require('../config/database');
 
 // OM-2: Get farmer orders (filtered by status)
 exports.getFarmerOrders = async (req, res) => {

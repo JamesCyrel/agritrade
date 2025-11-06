@@ -1,97 +1,95 @@
-const pool = require('../config/database');
+const supabase = require('../config/supabase');
 
 class HomepageContent {
   // Create homepage content tables (AD-5)
   static async createTable() {
-    const query = `
-      CREATE TABLE IF NOT EXISTS featured_farmers (
-        feature_id SERIAL PRIMARY KEY,
-        farmer_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-        display_order INTEGER DEFAULT 0,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(farmer_id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_featured_farmers_active ON featured_farmers(is_active);
-      CREATE INDEX IF NOT EXISTS idx_featured_farmers_order ON featured_farmers(display_order);
-    `;
-
-    try {
-      await pool.query(query);
-      console.log('✅ Homepage content tables created/verified');
-    } catch (error) {
-      console.error('❌ Error creating homepage content tables:', error);
-      throw error;
-    }
+    // Schema managed by Supabase migrations
+    console.log('ℹ️  HomepageContent.createTable skipped (managed in Supabase)');
   }
 
   // Add featured farmer
   static async addFeaturedFarmer(farmerId, displayOrder = null) {
     // Get max order if not provided
     if (displayOrder === null) {
-      const maxResult = await pool.query(
-        `SELECT COALESCE(MAX(display_order), 0) + 1 as next_order FROM featured_farmers`
-      );
-      displayOrder = parseInt(maxResult.rows[0].next_order);
+      const { data: maxRows, error: maxErr } = await supabase
+        .from('featured_farmers')
+        .select('display_order')
+        .order('display_order', { ascending: false })
+        .limit(1);
+      if (maxErr) throw maxErr;
+      const next = (maxRows?.[0]?.display_order || 0) + 1;
+      displayOrder = next;
     }
 
-    const result = await pool.query(
-      `INSERT INTO featured_farmers (farmer_id, display_order, is_active)
-       VALUES ($1, $2, TRUE)
-       ON CONFLICT (farmer_id) 
-       DO UPDATE SET is_active = TRUE, display_order = $2, updated_at = CURRENT_TIMESTAMP
-       RETURNING *`,
-      [farmerId, displayOrder]
-    );
-
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('featured_farmers')
+      .upsert({
+        farmer_id: farmerId,
+        display_order: displayOrder,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'farmer_id' })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   // Remove featured farmer
   static async removeFeaturedFarmer(farmerId) {
-    const result = await pool.query(
-      `UPDATE featured_farmers SET is_active = FALSE, updated_at = CURRENT_TIMESTAMP
-       WHERE farmer_id = $1
-       RETURNING *`,
-      [farmerId]
-    );
-
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('featured_farmers')
+      .update({ is_active: false, updated_at: new Date().toISOString() })
+      .eq('farmer_id', farmerId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 
   // Get all featured farmers
   static async getFeaturedFarmers(activeOnly = false) {
-    const whereClause = activeOnly ? 'WHERE is_active = TRUE' : '';
-    
-    const result = await pool.query(
-      `SELECT 
-        ff.*,
-        pr.farm_name,
-        pr.full_name,
-        pr.verification_status,
-        (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE farmer_id = ff.farmer_id) as average_rating
-       FROM featured_farmers ff
-       INNER JOIN profiles pr ON ff.farmer_id = pr.user_id
-       ${whereClause}
-       ORDER BY ff.display_order ASC, ff.created_at DESC`
-    );
+    const query = supabase
+      .from('featured_farmers')
+      .select('*')
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: false });
+    if (activeOnly) query.eq('is_active', true);
+    const { data: rows, error } = await query;
+    if (error) throw error;
 
-    return result.rows;
+    const enriched = await Promise.all(rows.map(async (ff) => {
+      const [{ data: profile }, { data: reviewRows }] = await Promise.all([
+        supabase.from('profiles').select('farm_name, full_name, verification_status').eq('user_id', ff.farmer_id).maybeSingle(),
+        supabase.from('reviews').select('rating').eq('farmer_id', ff.farmer_id),
+      ]);
+      let average_rating = 0;
+      if (reviewRows && reviewRows.length) {
+        const sum = reviewRows.reduce((s, r) => s + Number(r.rating || 0), 0);
+        average_rating = sum / reviewRows.length;
+      }
+      return {
+        ...ff,
+        farm_name: profile?.farm_name || null,
+        full_name: profile?.full_name || null,
+        verification_status: profile?.verification_status || null,
+        average_rating,
+      };
+    }));
+
+    return enriched;
   }
 
   // Update display order
   static async updateDisplayOrder(farmerId, displayOrder) {
-    const result = await pool.query(
-      `UPDATE featured_farmers
-       SET display_order = $1, updated_at = CURRENT_TIMESTAMP
-       WHERE farmer_id = $2
-       RETURNING *`,
-      [displayOrder, farmerId]
-    );
-
-    return result.rows[0];
+    const { data, error } = await supabase
+      .from('featured_farmers')
+      .update({ display_order: displayOrder, updated_at: new Date().toISOString() })
+      .eq('farmer_id', farmerId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   }
 }
 
