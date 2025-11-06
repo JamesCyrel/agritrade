@@ -6,6 +6,10 @@ import {
   ScrollView,
   RefreshControl,
   ActivityIndicator,
+  TouchableOpacity,
+  TextInput,
+  Alert,
+  Modal,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI } from "../../services/api";
@@ -16,6 +20,12 @@ export default function FarmerEarningsScreen() {
   const [ledger, setLedger] = useState([]);
   const [payouts, setPayouts] = useState([]);
   const [currentBalance, setCurrentBalance] = useState(0);
+  const [showPayoutModal, setShowPayoutModal] = useState(false);
+  const [payoutAmount, setPayoutAmount] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [branchCode, setBranchCode] = useState("");
+  const [submittingPayout, setSubmittingPayout] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,6 +67,49 @@ export default function FarmerEarningsScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleRequestPayout = async () => {
+    if (!payoutAmount || parseFloat(payoutAmount) <= 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid payout amount");
+      return;
+    }
+
+    if (parseFloat(payoutAmount) > currentBalance) {
+      Alert.alert("Insufficient Balance", `You can only request up to ${formatPeso(currentBalance)}`);
+      return;
+    }
+
+    if (!bankAccount || !bankName) {
+      Alert.alert("Missing Information", "Please provide bank account number and bank name");
+      return;
+    }
+
+    setSubmittingPayout(true);
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const response = await farmerAPI.requestPayout(token, parseFloat(payoutAmount), {
+        account_number: bankAccount,
+        bank_name: bankName,
+        branch_code: branchCode || null,
+      });
+
+      if (response?.success) {
+        Alert.alert("Success", "Payout request submitted successfully!");
+        setShowPayoutModal(false);
+        setPayoutAmount("");
+        setBankAccount("");
+        setBankName("");
+        setBranchCode("");
+        await loadData();
+      } else {
+        Alert.alert("Error", response?.message || "Failed to submit payout request");
+      }
+    } catch (error) {
+      Alert.alert("Error", error?.message || "Failed to submit payout request");
+    } finally {
+      setSubmittingPayout(false);
+    }
   };
 
   const formatPeso = (n) => `₱${parseFloat(n || 0).toFixed(2)}`;
@@ -135,6 +188,15 @@ export default function FarmerEarningsScreen() {
             </View>
           </View>
 
+          {currentBalance > 0 && (
+            <TouchableOpacity
+              style={styles.requestPayoutButton}
+              onPress={() => setShowPayoutModal(true)}
+            >
+              <Text style={styles.requestPayoutText}>Request Payout</Text>
+            </TouchableOpacity>
+          )}
+
           <Text style={styles.sectionTitle}>Recent Payouts</Text>
           {payouts.length === 0 ? (
             <View style={styles.emptyState}>
@@ -158,6 +220,85 @@ export default function FarmerEarningsScreen() {
           )}
         </ScrollView>
       )}
+
+      <Modal
+        visible={showPayoutModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPayoutModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Request Payout</Text>
+            <Text style={styles.modalSubtitle}>
+              Available Balance: {formatPeso(currentBalance)}
+            </Text>
+
+            <Text style={styles.inputLabel}>Amount</Text>
+            <TextInput
+              style={styles.input}
+              value={payoutAmount}
+              onChangeText={setPayoutAmount}
+              placeholder="Enter amount"
+              keyboardType="numeric"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.inputLabel}>Bank Account Number *</Text>
+            <TextInput
+              style={styles.input}
+              value={bankAccount}
+              onChangeText={setBankAccount}
+              placeholder="Enter account number"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.inputLabel}>Bank Name *</Text>
+            <TextInput
+              style={styles.input}
+              value={bankName}
+              onChangeText={setBankName}
+              placeholder="Enter bank name"
+              placeholderTextColor="#999"
+            />
+
+            <Text style={styles.inputLabel}>Branch Code (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              value={branchCode}
+              onChangeText={setBranchCode}
+              placeholder="Enter branch code"
+              placeholderTextColor="#999"
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowPayoutModal(false);
+                  setPayoutAmount("");
+                  setBankAccount("");
+                  setBankName("");
+                  setBranchCode("");
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.submitButton]}
+                onPress={handleRequestPayout}
+                disabled={submittingPayout}
+              >
+                {submittingPayout ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -267,5 +408,89 @@ const styles = StyleSheet.create({
   },
   emptyState: { alignItems: "center", padding: 16 },
   emptyStateText: { color: "#666" },
+  requestPayoutButton: {
+    backgroundColor: "#2d5016",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  requestPayoutText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    width: "90%",
+    maxHeight: "80%",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#2d5016",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: "#333",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 24,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 8,
+    alignItems: "center",
+    marginHorizontal: 6,
+  },
+  cancelButton: {
+    backgroundColor: "#f5f5f5",
+  },
+  submitButton: {
+    backgroundColor: "#2d5016",
+  },
+  cancelButtonText: {
+    color: "#333",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  submitButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
 });
 

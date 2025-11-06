@@ -139,10 +139,16 @@ export default function ConsumerHomeScreen() {
   };
 
   const renderProductCard = (product) => {
+    if (!product || !product.product_id) return null;
+    
     // Check favorite status when product is first rendered
     if (favoriteStatus[product.product_id] === undefined) {
       checkFavoriteStatus(product.product_id);
     }
+
+    const price = product.price_per_kg != null && !isNaN(parseFloat(product.price_per_kg)) 
+      ? parseFloat(product.price_per_kg).toFixed(2) 
+      : "0.00";
 
     return (
       <TouchableOpacity
@@ -151,7 +157,7 @@ export default function ConsumerHomeScreen() {
         onPress={() => router.push(`/consumer/products/${product.product_id}`)}
       >
         <View style={styles.cardImageContainer}>
-          {product.images && product.images.length > 0 ? (
+          {product.images && Array.isArray(product.images) && product.images.length > 0 ? (
             <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
           ) : (
             <View style={styles.cardImage}>
@@ -168,15 +174,15 @@ export default function ConsumerHomeScreen() {
           </TouchableOpacity>
         </View>
         <Text style={styles.cardTitle} numberOfLines={1}>
-          {product.variety_name}
+          {String(product.variety_name || "Unknown Variety")}
         </Text>
         <Text style={styles.cardFarmName} numberOfLines={1}>
-          {product.farm_name}
+          {String(product.farm_name || "Unknown Farm")}
         </Text>
-        <Text style={styles.cardPrice}>₱{product.price_per_kg}/kg</Text>
-        {product.average_rating > 0 && (
+        <Text style={styles.cardPrice}>₱{price}/kg</Text>
+        {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (
           <Text style={styles.cardRating}>
-            ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+            ⭐ {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
           </Text>
         )}
       </TouchableOpacity>
@@ -185,6 +191,10 @@ export default function ConsumerHomeScreen() {
 
   const renderFarmerCard = (farmer) => {
     if (!farmer || !farmer.farmer_id) return null;
+    
+    const farmerName = String(farmer.farm_name || farmer.full_name || "Unknown Farm");
+    const productCount = farmer.product_count != null ? Number(farmer.product_count) : 0;
+    
     return (
       <TouchableOpacity
         key={farmer.farmer_id}
@@ -195,19 +205,19 @@ export default function ConsumerHomeScreen() {
         <Text style={styles.cardImagePlaceholder}>🚜</Text>
       </View>
       <Text style={styles.cardTitle} numberOfLines={1}>
-        {farmer.farm_name || farmer.full_name}
+        {farmerName}
       </Text>
-      {farmer.address && (
+      {farmer.address && String(farmer.address).trim() && (
         <Text style={styles.cardLocation} numberOfLines={1}>
-          {farmer.address}
+          {String(farmer.address)}
         </Text>
       )}
-      {farmer.average_rating > 0 && (
+      {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
         <Text style={styles.cardRating}>
-          ⭐ {farmer.average_rating.toFixed(1)} ({farmer.total_reviews} reviews)
+          ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
         </Text>
       )}
-      <Text style={styles.cardProducts}>{farmer.product_count} products</Text>
+      <Text style={styles.cardProducts}>{String(productCount)} products</Text>
       </TouchableOpacity>
     );
   };
@@ -260,7 +270,9 @@ export default function ConsumerHomeScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalScroll}
             >
-              {homepageData.featured_farmers.map((farmer) => renderFarmerCard(farmer))}
+              {homepageData.featured_farmers
+                .filter((farmer) => farmer && farmer.farmer_id)
+                .map((farmer) => renderFarmerCard(farmer))}
             </ScrollView>
           </View>
         )}
@@ -274,7 +286,9 @@ export default function ConsumerHomeScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalScroll}
             >
-              {homepageData.popular_varieties.map((product) => renderProductCard(product))}
+              {homepageData.popular_varieties
+                .filter((product) => product && product.product_id)
+                .map((product) => renderProductCard(product))}
             </ScrollView>
           </View>
         )}
@@ -288,7 +302,9 @@ export default function ConsumerHomeScreen() {
               showsHorizontalScrollIndicator={false}
               style={styles.horizontalScroll}
             >
-              {homepageData.new_arrivals.map((product) => renderProductCard(product))}
+              {homepageData.new_arrivals
+                .filter((product) => product && product.product_id)
+                .map((product) => renderProductCard(product))}
             </ScrollView>
           </View>
         )}

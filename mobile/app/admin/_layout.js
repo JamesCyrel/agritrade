@@ -50,6 +50,13 @@ export default function AdminLayout() {
         }}
       />
       <Tabs.Screen
+        name="payouts"
+        options={{
+          title: "Payouts",
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>💰</Text>,
+        }}
+      />
+      <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",

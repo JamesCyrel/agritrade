@@ -40,7 +40,8 @@ exports.processDigitalPayment = async (req, res) => {
       await Payment.updateTransactionStatus(transaction.transaction_id, 'COMPLETED');
 
       // Record earning in farmer ledger (PS-3)
-      const commissionRate = 0.05; // 5% platform commission (configurable)
+      const commissionSettings = await Payment.getCommissionRate();
+      const commissionRate = commissionSettings.rate;
       const commissionAmount = order.total_amount * commissionRate;
       const earningAmount = order.total_amount - commissionAmount;
 
@@ -182,7 +183,8 @@ exports.confirmCODPayment = async (req, res) => {
 
     // Record earning in farmer ledger (PS-3)
     // For COD, farmer collects full amount, but owes commission
-    const commissionRate = 0.05; // 5% platform commission
+    const commissionSettings = await Payment.getCommissionRate();
+    const commissionRate = commissionSettings.rate;
     const commissionAmount = received * commissionRate;
     const earningAmount = received - commissionAmount;
 
@@ -281,6 +283,48 @@ exports.updateCODSettings = async (req, res) => {
   } catch (error) {
     console.error('updateCODSettings error:', error);
     res.status(500).json({ success: false, message: 'Failed to update COD settings' });
+  }
+};
+
+// PS-3: Request payout (Farmer)
+exports.requestPayout = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { amount, bankDetails } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ success: false, message: 'Valid payout amount is required' });
+    }
+
+    if (!bankDetails || !bankDetails.account_number || !bankDetails.bank_name) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Bank account number and bank name are required' 
+      });
+    }
+
+    const payout = await Payment.requestPayout(userId, amount, bankDetails);
+    
+    // Create ledger entry for payout request (negative balance)
+    await Payment.addLedgerEntry(
+      userId,
+      null,
+      'PAYOUT',
+      -parseFloat(amount),
+      `Payout request #${payout.payout_id}`
+    );
+
+    res.json({ 
+      success: true, 
+      message: 'Payout request submitted successfully',
+      data: payout 
+    });
+  } catch (error) {
+    console.error('requestPayout error:', error);
+    res.status(400).json({ 
+      success: false, 
+      message: error.message || 'Failed to request payout' 
+    });
   }
 };
 

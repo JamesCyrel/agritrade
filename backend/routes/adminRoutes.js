@@ -33,6 +33,12 @@ router.get('/orders/:orderId', adminController.getOrderDetails);
 router.get('/transactions', adminController.getAllTransactions);
 router.post('/transactions/:transactionId/refund', adminController.processRefund);
 router.get('/payouts', adminController.getAllPayouts);
+router.get('/payouts/:payoutId', adminController.getPayoutDetails);
+router.post('/payouts/:payoutId/approve', adminController.approvePayout);
+router.post('/payouts/:payoutId/complete', adminController.completePayout);
+router.post('/payouts/:payoutId/reject', adminController.rejectPayout);
+router.get('/commission-settings', adminController.getCommissionSettings);
+router.put('/commission-settings', adminController.updateCommissionSettings);
 
 // AD-4: Dispute Resolution
 router.get('/disputes', adminController.getAllDisputes);

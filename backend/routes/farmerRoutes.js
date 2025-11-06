@@ -27,6 +27,7 @@ router.put('/cod/settings', paymentController.updateCODSettings);
 router.post('/payments/cod/confirm', paymentController.confirmCODPayment);
 router.get('/ledger', paymentController.getFarmerLedger);
 router.get('/payouts', paymentController.getFarmerPayouts);
+router.post('/payouts/request', paymentController.requestPayout);
 
 // Order Management (OM-2, OM-3, OM-4)
 router.get('/orders', farmerOrderController.getFarmerOrders);

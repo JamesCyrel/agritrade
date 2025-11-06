@@ -504,9 +504,11 @@ exports.getAllPayouts = async (req, res) => {
       SELECT 
         fp.*,
         pr.farm_name,
-        pr.full_name as farmer_name
+        pr.full_name as farmer_name,
+        u.email as farmer_email
       FROM farmer_payouts fp
       LEFT JOIN profiles pr ON fp.farmer_id = pr.user_id
+      LEFT JOIN users u ON fp.farmer_id = u.user_id
       ${whereSql}
       ORDER BY fp.created_at DESC
       LIMIT $${paramCount++} OFFSET $${paramCount}
@@ -518,6 +520,201 @@ exports.getAllPayouts = async (req, res) => {
   } catch (error) {
     console.error('getAllPayouts error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch payouts' });
+  }
+};
+
+// AD-3: Get payout details
+exports.getPayoutDetails = async (req, res) => {
+  try {
+    const { payoutId } = req.params;
+    const Payment = require('../models/Payment');
+    
+    const payout = await Payment.getPayoutById(payoutId);
+    
+    if (!payout) {
+      return res.status(404).json({ success: false, message: 'Payout not found' });
+    }
+    
+    res.json({ success: true, data: payout });
+  } catch (error) {
+    console.error('getPayoutDetails error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch payout details' });
+  }
+};
+
+// AD-3: Approve payout
+exports.approvePayout = async (req, res) => {
+  try {
+    const { payoutId } = req.params;
+    const { transactionReference, payoutDate } = req.body;
+    const adminId = req.user.userId;
+    
+    const Payment = require('../models/Payment');
+    const payout = await Payment.getPayoutById(payoutId);
+    
+    if (!payout) {
+      return res.status(404).json({ success: false, message: 'Payout not found' });
+    }
+    
+    if (payout.status !== 'PENDING') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Payout is already ${payout.status}` 
+      });
+    }
+    
+    // Update payout status to PROCESSING or COMPLETED
+    const newStatus = 'PROCESSING'; // Admin approves, moves to processing
+    const updatedPayout = await Payment.updatePayoutStatus(
+      payoutId,
+      newStatus,
+      transactionReference || null,
+      payoutDate || new Date().toISOString().split('T')[0]
+    );
+    
+    // TODO: Send notification to farmer
+    
+    res.json({ 
+      success: true, 
+      message: 'Payout approved successfully',
+      data: updatedPayout 
+    });
+  } catch (error) {
+    console.error('approvePayout error:', error);
+    res.status(500).json({ success: false, message: 'Failed to approve payout' });
+  }
+};
+
+// AD-3: Complete payout (mark as completed after transfer)
+exports.completePayout = async (req, res) => {
+  try {
+    const { payoutId } = req.params;
+    const { transactionReference, payoutDate } = req.body;
+    
+    const Payment = require('../models/Payment');
+    const payout = await Payment.getPayoutById(payoutId);
+    
+    if (!payout) {
+      return res.status(404).json({ success: false, message: 'Payout not found' });
+    }
+    
+    if (payout.status !== 'PROCESSING') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Payout must be PROCESSING to complete. Current status: ${payout.status}` 
+      });
+    }
+    
+    const updatedPayout = await Payment.updatePayoutStatus(
+      payoutId,
+      'COMPLETED',
+      transactionReference || null,
+      payoutDate || new Date().toISOString().split('T')[0]
+    );
+    
+    // TODO: Send notification to farmer
+    
+    res.json({ 
+      success: true, 
+      message: 'Payout completed successfully',
+      data: updatedPayout 
+    });
+  } catch (error) {
+    console.error('completePayout error:', error);
+    res.status(500).json({ success: false, message: 'Failed to complete payout' });
+  }
+};
+
+// AD-3: Reject payout
+exports.rejectPayout = async (req, res) => {
+  try {
+    const { payoutId } = req.params;
+    const { reason } = req.body;
+    
+    const Payment = require('../models/Payment');
+    const payout = await Payment.getPayoutById(payoutId);
+    
+    if (!payout) {
+      return res.status(404).json({ success: false, message: 'Payout not found' });
+    }
+    
+    if (payout.status !== 'PENDING') {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Cannot reject payout with status: ${payout.status}` 
+      });
+    }
+    
+    // Reverse the payout ledger entry (add back to balance)
+    const PaymentModel = require('../models/Payment');
+    await PaymentModel.addLedgerEntry(
+      payout.farmer_id,
+      null,
+      'PAYOUT',
+      parseFloat(payout.net_amount),
+      `Payout #${payoutId} rejected${reason ? `: ${reason}` : ''}`
+    );
+    
+    // Update payout status to FAILED (or we could use 'REJECTED' if we add it)
+    const updatedPayout = await Payment.updatePayoutStatus(
+      payoutId,
+      'FAILED',
+      null,
+      null
+    );
+    
+    // TODO: Send notification to farmer
+    
+    res.json({ 
+      success: true, 
+      message: 'Payout rejected successfully',
+      data: updatedPayout 
+    });
+  } catch (error) {
+    console.error('rejectPayout error:', error);
+    res.status(500).json({ success: false, message: 'Failed to reject payout' });
+  }
+};
+
+// AD-3: Get/Update commission settings
+exports.getCommissionSettings = async (req, res) => {
+  try {
+    const Payment = require('../models/Payment');
+    const settings = await Payment.getCommissionRate();
+    res.json({ success: true, data: settings });
+  } catch (error) {
+    console.error('getCommissionSettings error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch commission settings' });
+  }
+};
+
+exports.updateCommissionSettings = async (req, res) => {
+  try {
+    const { rate, minCommission } = req.body;
+    const adminId = req.user.userId;
+    
+    if (rate === undefined || rate < 0 || rate > 1) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Commission rate must be between 0 and 1 (e.g., 0.05 for 5%)' 
+      });
+    }
+    
+    const Payment = require('../models/Payment');
+    const settings = await Payment.updateCommissionRate(
+      parseFloat(rate),
+      minCommission ? parseFloat(minCommission) : 0,
+      adminId
+    );
+    
+    res.json({ 
+      success: true, 
+      message: 'Commission settings updated successfully',
+      data: settings 
+    });
+  } catch (error) {
+    console.error('updateCommissionSettings error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update commission settings' });
   }
 };
 
@@ -593,14 +790,16 @@ exports.getAnalytics = async (req, res) => {
     `);
     
     // Platform Revenue (Commission)
+    // Note: Commission amounts are stored as negative values in ledger (they reduce farmer balance)
+    // So we need to negate the sum to get positive platform revenue
     const revenueQuery = await pool.query(`
       SELECT 
-        COALESCE(SUM(
+        COALESCE(ABS(SUM(
           CASE 
             WHEN fl.transaction_type = 'COMMISSION' THEN fl.amount
             ELSE 0
           END
-        ), 0) as platform_revenue
+        )), 0) as platform_revenue
       FROM farmer_ledger fl
       INNER JOIN orders o ON fl.order_id = o.order_id
       ${dateFilter}

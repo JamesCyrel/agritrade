@@ -69,6 +69,15 @@ class Payment {
         UNIQUE(user_id)
       );
 
+      CREATE TABLE IF NOT EXISTS commission_settings (
+        setting_id SERIAL PRIMARY KEY,
+        commission_rate DECIMAL(5, 4) NOT NULL DEFAULT 0.05,
+        min_commission DECIMAL(10, 2) DEFAULT 0,
+        updated_by INTEGER REFERENCES users(user_id),
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(setting_id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_payment_transactions_order_id ON payment_transactions(order_id);
       CREATE INDEX IF NOT EXISTS idx_payment_transactions_status ON payment_transactions(payment_status);
       CREATE INDEX IF NOT EXISTS idx_farmer_ledger_farmer_id ON farmer_ledger(farmer_id);
@@ -77,6 +86,11 @@ class Payment {
       CREATE INDEX IF NOT EXISTS idx_farmer_payouts_status ON farmer_payouts(status);
       CREATE INDEX IF NOT EXISTS idx_cod_settings_farmer_id ON cod_settings(farmer_id);
       CREATE INDEX IF NOT EXISTS idx_cod_eligibility_user_id ON cod_eligibility(user_id);
+
+      -- Initialize commission settings if not exists
+      INSERT INTO commission_settings (commission_rate, setting_id)
+      SELECT 0.05, 1
+      WHERE NOT EXISTS (SELECT 1 FROM commission_settings);
     `;
 
     try {
@@ -287,6 +301,94 @@ class Payment {
       [userId, is_eligible !== undefined ? is_eligible : true, reason || null, max_order_value || null, restrictions || null]
     );
     return result.rows[0];
+  }
+
+  // Commission Settings (for admin)
+  static async getCommissionRate() {
+    const result = await pool.query(
+      `SELECT commission_rate, min_commission FROM commission_settings ORDER BY setting_id LIMIT 1`
+    );
+    return result.rows.length > 0 ? {
+      rate: parseFloat(result.rows[0].commission_rate) || 0.05,
+      minCommission: parseFloat(result.rows[0].min_commission) || 0
+    } : { rate: 0.05, minCommission: 0 };
+  }
+
+  static async updateCommissionRate(rate, minCommission = 0, updatedBy = null) {
+    const result = await pool.query(
+      `UPDATE commission_settings 
+       SET commission_rate = $1, min_commission = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE setting_id = 1
+       RETURNING *`,
+      [rate, minCommission, updatedBy]
+    );
+    if (result.rows.length === 0) {
+      // Insert if not exists
+      const insertResult = await pool.query(
+        `INSERT INTO commission_settings (setting_id, commission_rate, min_commission, updated_by)
+         VALUES (1, $1, $2, $3)
+         RETURNING *`,
+        [rate, minCommission, updatedBy]
+      );
+      return insertResult.rows[0];
+    }
+    return result.rows[0];
+  }
+
+  // Create payout request (farmer requests payout)
+  static async requestPayout(farmerId, amount, bankDetails) {
+    const currentBalance = await this.getFarmerBalance(farmerId);
+    
+    if (parseFloat(amount) > currentBalance) {
+      throw new Error('Requested amount exceeds available balance');
+    }
+
+    if (parseFloat(amount) <= 0) {
+      throw new Error('Payout amount must be greater than 0');
+    }
+
+    // Check for existing pending payout
+    const existingPending = await pool.query(
+      `SELECT payout_id FROM farmer_payouts 
+       WHERE farmer_id = $1 AND status = 'PENDING' 
+       LIMIT 1`,
+      [farmerId]
+    );
+
+    if (existingPending.rows.length > 0) {
+      throw new Error('You already have a pending payout request');
+    }
+
+    const result = await pool.query(
+      `INSERT INTO farmer_payouts 
+       (farmer_id, payout_period_start, payout_period_end, total_earnings, commission_amount, net_amount, 
+        bank_account_number, bank_name, branch_code, status)
+       VALUES ($1, CURRENT_DATE, CURRENT_DATE, $2, 0, $2, $3, $4, $5, 'PENDING')
+       RETURNING *`,
+      [
+        farmerId,
+        parseFloat(amount),
+        bankDetails.account_number,
+        bankDetails.bank_name,
+        bankDetails.branch_code
+      ]
+    );
+    return result.rows[0];
+  }
+
+  // Get payout by ID
+  static async getPayoutById(payoutId) {
+    const result = await pool.query(
+      `SELECT fp.*, 
+        pr.farm_name, pr.full_name as farmer_name,
+        u.email as farmer_email
+       FROM farmer_payouts fp
+       LEFT JOIN profiles pr ON fp.farmer_id = pr.user_id
+       LEFT JOIN users u ON fp.farmer_id = u.user_id
+       WHERE fp.payout_id = $1`,
+      [payoutId]
+    );
+    return result.rows[0] || null;
   }
 }
 

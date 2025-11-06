@@ -78,11 +78,12 @@ export default function FarmerStorefrontScreen() {
     );
   }
 
-  if (!storefront) {
+  if (!storefront || !storefront.farmer) {
     return null;
   }
 
   const { farmer, products } = storefront;
+  const farmerName = String(farmer.farm_name || farmer.full_name || "Unknown Farm");
 
   return (
     <ScrollView style={styles.container}>
@@ -91,13 +92,13 @@ export default function FarmerStorefrontScreen() {
         <View style={styles.farmerImage}>
           <Text style={styles.farmerImagePlaceholder}>🚜</Text>
         </View>
-        <Text style={styles.farmerName}>{farmer.farm_name || farmer.full_name}</Text>
-        {farmer.address && (
-          <Text style={styles.farmerAddress}>📍 {farmer.address}</Text>
+        <Text style={styles.farmerName}>{farmerName}</Text>
+        {farmer.address && String(farmer.address).trim() && (
+          <Text style={styles.farmerAddress}>📍 {String(farmer.address)}</Text>
         )}
-        {farmer.average_rating > 0 && (
+        {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
           <Text style={styles.farmerRating}>
-            ⭐ {farmer.average_rating.toFixed(1)} ({farmer.total_reviews} reviews)
+            ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
           </Text>
         )}
       </View>
@@ -105,58 +106,66 @@ export default function FarmerStorefrontScreen() {
       {/* Products Section */}
       <View style={styles.productsSection}>
         <Text style={styles.sectionTitle}>
-          Products ({products.length})
+          Products ({Array.isArray(products) ? products.length : 0})
         </Text>
-        {products.length === 0 ? (
+        {!Array.isArray(products) || products.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateText}>No products available</Text>
           </View>
         ) : (
-          products.map((product) => {
-            // Check favorite status when product is first rendered
-            if (favoriteStatus[product.product_id] === undefined) {
-              checkFavoriteStatus(product.product_id);
-            }
+          products
+            .filter((product) => product && product.product_id)
+            .map((product) => {
+              // Check favorite status when product is first rendered
+              if (favoriteStatus[product.product_id] === undefined) {
+                checkFavoriteStatus(product.product_id);
+              }
 
-            return (
-              <TouchableOpacity
-                key={product.product_id}
-                style={styles.productCard}
-                onPress={() => router.push(`/consumer/products/${product.product_id}`)}
-              >
-                <View style={styles.productImageContainer}>
-                  {product.images && product.images.length > 0 ? (
-                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
-                  ) : (
-                    <View style={styles.productImage}>
-                      <Text style={styles.productImagePlaceholder}>🌾</Text>
-                    </View>
-                  )}
-                  <TouchableOpacity
-                    style={styles.favoriteButton}
-                    onPress={(e) => handleToggleFavorite(product.product_id, e)}
-                  >
-                    <Text style={styles.favoriteIcon}>
-                      {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
+              const price = product.price_per_kg != null && !isNaN(parseFloat(product.price_per_kg))
+                ? parseFloat(product.price_per_kg).toFixed(2)
+                : "0.00";
+              const quantity = product.available_quantity != null ? String(product.available_quantity) : "0";
+              const unit = String(product.quantity_unit || "kg");
+
+              return (
+                <TouchableOpacity
+                  key={product.product_id}
+                  style={styles.productCard}
+                  onPress={() => router.push(`/consumer/products/${product.product_id}`)}
+                >
+                  <View style={styles.productImageContainer}>
+                    {product.images && Array.isArray(product.images) && product.images.length > 0 ? (
+                      <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                    ) : (
+                      <View style={styles.productImage}>
+                        <Text style={styles.productImagePlaceholder}>🌾</Text>
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={(e) => handleToggleFavorite(product.product_id, e)}
+                    >
+                      <Text style={styles.favoriteIcon}>
+                        {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.productDetails}>
+                    <Text style={styles.productName}>{String(product.variety_name || "Unknown Variety")}</Text>
+                    <Text style={styles.productType}>{String(product.rice_type || "")}</Text>
+                    <Text style={styles.productPrice}>₱{price}/kg</Text>
+                    <Text style={styles.productAvailability}>
+                      {quantity} {unit} available
                     </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.productDetails}>
-                  <Text style={styles.productName}>{product.variety_name}</Text>
-                  <Text style={styles.productType}>{product.rice_type}</Text>
-                  <Text style={styles.productPrice}>₱{product.price_per_kg}/kg</Text>
-                  <Text style={styles.productAvailability}>
-                    {product.available_quantity} {product.quantity_unit} available
-                  </Text>
-                  {product.average_rating > 0 && (
-                    <Text style={styles.productRating}>
-                      ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
-                    </Text>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })
+                    {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (
+                      <Text style={styles.productRating}>
+                        ⭐ {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })
         )}
       </View>
     </ScrollView>

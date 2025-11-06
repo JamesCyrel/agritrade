@@ -95,6 +95,9 @@ export const farmerAPI = {
   getPayouts: async (token) => {
     return await apiCall('/farmer/payouts', 'GET', null, token);
   },
+  requestPayout: async (token, amount, bankDetails) => {
+    return await apiCall('/farmer/payouts/request', 'POST', { amount, bankDetails }, token);
+  },
 };
 
 // Admin API calls
@@ -148,6 +151,33 @@ export const adminAPI = {
     if (endDate) q.append('endDate', endDate);
     const qs = q.toString();
     return await apiCall(`/admin/analytics${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
+  // AD-3: Payout Management
+  getAllPayouts: async (token, filters = {}) => {
+    const q = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key]) q.append(key, filters[key]);
+    });
+    const qs = q.toString();
+    return await apiCall(`/admin/payouts${qs ? `?${qs}` : ''}`, 'GET', null, token);
+  },
+  getPayoutDetails: async (token, payoutId) => {
+    return await apiCall(`/admin/payouts/${payoutId}`, 'GET', null, token);
+  },
+  approvePayout: async (token, payoutId, transactionReference = null, payoutDate = null) => {
+    return await apiCall(`/admin/payouts/${payoutId}/approve`, 'POST', { transactionReference, payoutDate }, token);
+  },
+  completePayout: async (token, payoutId, transactionReference = null, payoutDate = null) => {
+    return await apiCall(`/admin/payouts/${payoutId}/complete`, 'POST', { transactionReference, payoutDate }, token);
+  },
+  rejectPayout: async (token, payoutId, reason = null) => {
+    return await apiCall(`/admin/payouts/${payoutId}/reject`, 'POST', { reason }, token);
+  },
+  getCommissionSettings: async (token) => {
+    return await apiCall('/admin/commission-settings', 'GET', null, token);
+  },
+  updateCommissionSettings: async (token, rate, minCommission = 0) => {
+    return await apiCall('/admin/commission-settings', 'PUT', { rate, minCommission }, token);
   },
 };
 

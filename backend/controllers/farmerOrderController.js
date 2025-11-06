@@ -180,7 +180,8 @@ exports.updateOrderStatus = async (req, res) => {
           const alreadyRecorded = await Payment.hasEarningForOrder(order.farmer_id, order.order_id);
           if (!alreadyRecorded) {
             const received = parseFloat(order.total_amount || 0);
-            const commissionRate = 0.05; // configurable commission
+            const commissionSettings = await Payment.getCommissionRate();
+            const commissionRate = commissionSettings.rate;
             const commissionAmount = received * commissionRate;
             const earningAmount = received - commissionAmount;
 
