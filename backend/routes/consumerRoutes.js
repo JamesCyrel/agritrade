@@ -6,6 +6,7 @@ const orderController = require('../controllers/orderController');
 const paymentController = require('../controllers/paymentController');
 const notificationController = require('../controllers/notificationController');
 const reviewController = require('../controllers/reviewController');
+const favoriteController = require('../controllers/favoriteController');
 const { authenticate, authorize } = require('../middleware/authMiddleware');
 
 // All routes require authentication and CONSUMER role
@@ -65,6 +66,14 @@ router.get('/orders/:orderId/review', reviewController.checkOrderReview);
 router.get('/farmers/:farmerId/reviews', reviewController.getFarmerReviews);
 router.get('/farmers/:farmerId/rating', reviewController.getFarmerAverageRating);
 router.get('/products/:productId/reviews', reviewController.getProductReviews);
+
+// Favorites
+router.get('/favorites', favoriteController.getFavorites);
+// More specific routes must come before less specific ones
+router.get('/favorites/:productId/check', favoriteController.checkFavorite);
+router.post('/favorites/:productId/toggle', favoriteController.toggleFavorite);
+router.post('/favorites/:productId', favoriteController.addFavorite);
+router.delete('/favorites/:productId', favoriteController.removeFavorite);
 
 module.exports = router;
 

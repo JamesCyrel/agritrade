@@ -32,8 +32,18 @@ class Consumer {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
 
+      CREATE TABLE IF NOT EXISTS consumer_favorites (
+        favorite_id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+        product_id INTEGER NOT NULL REFERENCES products(product_id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(user_id, product_id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON consumer_addresses(user_id);
       CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON consumer_payment_methods(user_id);
+      CREATE INDEX IF NOT EXISTS idx_favorites_user_id ON consumer_favorites(user_id);
+      CREATE INDEX IF NOT EXISTS idx_favorites_product_id ON consumer_favorites(product_id);
     `;
 
     try {
@@ -183,6 +193,74 @@ class Consumer {
       RETURNING payment_id
     `, [paymentId, userId]);
     return result.rows[0];
+  }
+
+  // Favorites methods
+  static async addFavorite(userId, productId) {
+    const result = await pool.query(`
+      INSERT INTO consumer_favorites (user_id, product_id)
+      VALUES ($1, $2)
+      ON CONFLICT (user_id, product_id) DO NOTHING
+      RETURNING favorite_id, user_id, product_id, created_at
+    `, [userId, productId]);
+    return result.rows[0];
+  }
+
+  static async removeFavorite(userId, productId) {
+    const result = await pool.query(`
+      DELETE FROM consumer_favorites
+      WHERE user_id = $1 AND product_id = $2
+      RETURNING favorite_id
+    `, [userId, productId]);
+    return result.rows[0];
+  }
+
+  static async getFavorites(userId) {
+    const result = await pool.query(`
+      SELECT 
+        f.favorite_id,
+        f.created_at as favorited_at,
+        p.product_id,
+        p.variety_name,
+        p.rice_type,
+        p.price_per_kg,
+        p.available_quantity,
+        p.quantity_unit,
+        p.description,
+        p.status,
+        pr.farm_name,
+        pr.full_name as farmer_name,
+        pr.user_id as farmer_id,
+        (SELECT COALESCE(AVG(rating), 0) FROM reviews WHERE product_id = p.product_id) as average_rating,
+        (SELECT COUNT(*) FROM reviews WHERE product_id = p.product_id) as total_reviews,
+        (
+          SELECT json_agg(image_url)
+          FROM (
+            SELECT pi.image_url
+            FROM product_images pi
+            WHERE pi.product_id = p.product_id
+            ORDER BY pi.image_order
+            LIMIT 5
+          ) sub
+        ) as images
+      FROM consumer_favorites f
+      INNER JOIN products p ON f.product_id = p.product_id
+      INNER JOIN profiles pr ON p.farmer_id = pr.user_id
+      WHERE f.user_id = $1
+        AND p.status = 'ACTIVE'
+        AND pr.verification_status = 'APPROVED'
+      ORDER BY f.created_at DESC
+    `, [userId]);
+    return result.rows;
+  }
+
+  static async isFavorite(userId, productId) {
+    const result = await pool.query(`
+      SELECT favorite_id
+      FROM consumer_favorites
+      WHERE user_id = $1 AND product_id = $2
+    `, [userId, productId]);
+    return result.rows.length > 0;
   }
 }
 

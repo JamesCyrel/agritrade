@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
 
@@ -24,6 +24,7 @@ export default function ConsumerHomeScreen() {
     popular_varieties: [],
     new_arrivals: [],
   });
+  const [favoriteStatus, setFavoriteStatus] = useState({}); // { productId: isFavorite }
 
   const loadHomepageData = async () => {
     try {
@@ -49,6 +50,55 @@ export default function ConsumerHomeScreen() {
     loadHomepageData();
   }, []);
 
+  // Refresh favorite status when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      // Get all product IDs from current homepage data
+      const allProducts = [
+        ...(homepageData.popular_varieties || []),
+        ...(homepageData.new_arrivals || []),
+      ];
+
+      if (allProducts.length === 0) return;
+
+      const refreshFavoriteStatus = async () => {
+        try {
+          const token = await AsyncStorage.getItem("authToken");
+          // Check favorite status for all products in parallel
+          const favoriteChecks = await Promise.all(
+            allProducts.map(async (product) => {
+              try {
+                const res = await consumerAPI.checkFavorite(token, product.product_id);
+                return {
+                  productId: product.product_id,
+                  isFavorite: res.success ? res.isFavorite : false,
+                };
+              } catch (error) {
+                console.error(`Error checking favorite for product ${product.product_id}:`, error);
+                return null;
+              }
+            })
+          );
+
+          // Update favorite status state
+          setFavoriteStatus((prev) => {
+            const newFavoriteStatus = { ...prev };
+            favoriteChecks.forEach((check) => {
+              if (check) {
+                newFavoriteStatus[check.productId] = check.isFavorite;
+              }
+            });
+            return newFavoriteStatus;
+          });
+        } catch (error) {
+          console.error("Refresh favorite status error:", error);
+        }
+      };
+
+      refreshFavoriteStatus();
+    }, [homepageData])
+  );
+
   const onRefresh = () => {
     setRefreshing(true);
     loadHomepageData();
@@ -63,33 +113,75 @@ export default function ConsumerHomeScreen() {
     }
   };
 
-  const renderProductCard = (product) => (
-    <TouchableOpacity
-      key={product.product_id}
-      style={styles.card}
-      onPress={() => router.push(`/consumer/products/${product.product_id}`)}
-    >
-      {product.images && product.images.length > 0 ? (
-        <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
-      ) : (
-        <View style={styles.cardImage}>
-          <Text style={styles.cardImagePlaceholder}>🌾</Text>
+  const handleToggleFavorite = async (productId, e) => {
+    e.stopPropagation();
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.toggleFavorite(token, productId);
+      if (res.success) {
+        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+      }
+    } catch (error) {
+      console.error("Toggle favorite error:", error);
+    }
+  };
+
+  const checkFavoriteStatus = async (productId) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.checkFavorite(token, productId);
+      if (res.success) {
+        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+      }
+    } catch (error) {
+      console.error("Check favorite error:", error);
+    }
+  };
+
+  const renderProductCard = (product) => {
+    // Check favorite status when product is first rendered
+    if (favoriteStatus[product.product_id] === undefined) {
+      checkFavoriteStatus(product.product_id);
+    }
+
+    return (
+      <TouchableOpacity
+        key={product.product_id}
+        style={styles.card}
+        onPress={() => router.push(`/consumer/products/${product.product_id}`)}
+      >
+        <View style={styles.cardImageContainer}>
+          {product.images && product.images.length > 0 ? (
+            <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
+          ) : (
+            <View style={styles.cardImage}>
+              <Text style={styles.cardImagePlaceholder}>🌾</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={(e) => handleToggleFavorite(product.product_id, e)}
+          >
+            <Text style={styles.favoriteIcon}>
+              {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
+            </Text>
+          </TouchableOpacity>
         </View>
-      )}
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {product.variety_name}
-      </Text>
-      <Text style={styles.cardFarmName} numberOfLines={1}>
-        {product.farm_name}
-      </Text>
-      <Text style={styles.cardPrice}>₱{product.price_per_kg}/kg</Text>
-      {product.average_rating > 0 && (
-        <Text style={styles.cardRating}>
-          ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {product.variety_name}
         </Text>
-      )}
-    </TouchableOpacity>
-  );
+        <Text style={styles.cardFarmName} numberOfLines={1}>
+          {product.farm_name}
+        </Text>
+        <Text style={styles.cardPrice}>₱{product.price_per_kg}/kg</Text>
+        {product.average_rating > 0 && (
+          <Text style={styles.cardRating}>
+            ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderFarmerCard = (farmer) => {
     if (!farmer || !farmer.farmer_id) return null;
@@ -299,6 +391,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  cardImageContainer: {
+    width: "100%",
+    height: 120,
+    position: "relative",
+    marginBottom: 8,
+  },
   cardImage: {
     width: "100%",
     height: 120,
@@ -306,7 +404,20 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 8,
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 16,
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  favoriteIcon: {
+    fontSize: 18,
   },
   cardImagePlaceholder: {
     fontSize: 48,

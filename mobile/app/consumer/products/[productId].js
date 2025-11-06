@@ -12,7 +12,7 @@ import {
   TextInput,
   Modal,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../../services/api";
 
@@ -28,10 +28,57 @@ export default function ProductDetailScreen() {
   const [selectedSackSize, setSelectedSackSize] = useState(null); // null = buy by kg
   const [quantity, setQuantity] = useState("1");
   const [addingToCart, setAddingToCart] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
 
   useEffect(() => {
     loadProduct();
   }, [productId]);
+
+  useEffect(() => {
+    if (productId) {
+      checkFavoriteStatus();
+    }
+  }, [productId]);
+
+  // Refresh favorite status when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (productId) {
+        checkFavoriteStatus();
+      }
+    }, [productId])
+  );
+
+  const checkFavoriteStatus = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.checkFavorite(token, productId);
+      if (res.success) {
+        setIsFavorite(res.isFavorite);
+      }
+    } catch (error) {
+      console.error("Check favorite error:", error);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    try {
+      setTogglingFavorite(true);
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.toggleFavorite(token, productId);
+      if (res.success) {
+        setIsFavorite(res.isFavorite);
+      } else {
+        Alert.alert("Error", res.message || "Failed to update favorite");
+      }
+    } catch (error) {
+      console.error("Toggle favorite error:", error);
+      Alert.alert("Error", "Failed to update favorite");
+    } finally {
+      setTogglingFavorite(false);
+    }
+  };
 
   const loadProduct = async () => {
     try {
@@ -112,22 +159,42 @@ export default function ProductDetailScreen() {
     <ScrollView style={styles.container}>
       {/* Images */}
       {product.images && product.images.length > 0 ? (
-        <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-          {product.images.map((image, index) => (
-            <Image key={index} source={{ uri: image }} style={styles.productImage} />
-          ))}
-        </ScrollView>
+        <View>
+          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+            {product.images.map((image, index) => (
+              <Image key={index} source={{ uri: image }} style={styles.productImage} />
+            ))}
+          </ScrollView>
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={handleToggleFavorite}
+            disabled={togglingFavorite}
+          >
+            <Text style={styles.favoriteIcon}>{isFavorite ? "❤️" : "🤍"}</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
         <View style={styles.productImage}>
           <Text style={styles.productImagePlaceholder}>🌾</Text>
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={handleToggleFavorite}
+            disabled={togglingFavorite}
+          >
+            <Text style={styles.favoriteIcon}>{isFavorite ? "❤️" : "🤍"}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
       <View style={styles.content}>
         {/* Product Info */}
-        <Text style={styles.productName}>{product.variety_name}</Text>
-        <Text style={styles.productType}>{product.rice_type}</Text>
-        <Text style={styles.productPrice}>₱{product.price_per_kg} per kg</Text>
+        <View style={styles.productHeader}>
+          <View style={styles.productHeaderLeft}>
+            <Text style={styles.productName}>{product.variety_name}</Text>
+            <Text style={styles.productType}>{product.rice_type}</Text>
+            <Text style={styles.productPrice}>₱{product.price_per_kg} per kg</Text>
+          </View>
+        </View>
 
         {product.description && (
           <View style={styles.section}>
@@ -468,5 +535,33 @@ const styles = StyleSheet.create({
   },
   modalAddButtonDisabled: { opacity: 0.5 },
   modalAddButtonText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  productHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 20,
+  },
+  productHeaderLeft: {
+    flex: 1,
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 24,
+    width: 48,
+    height: 48,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  favoriteIcon: {
+    fontSize: 24,
+  },
 });
 

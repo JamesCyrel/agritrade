@@ -120,6 +120,17 @@ class Payment {
     return result.rows[0] || null;
   }
 
+  // Check if earning already recorded for an order (to avoid duplicates)
+  static async hasEarningForOrder(farmerId, orderId) {
+    const result = await pool.query(
+      `SELECT 1 FROM farmer_ledger 
+       WHERE farmer_id = $1 AND order_id = $2 AND transaction_type = 'EARNING' 
+       LIMIT 1`,
+      [farmerId, orderId]
+    );
+    return result.rows.length > 0;
+  }
+
   // Add ledger entry (PS-3)
   static async addLedgerEntry(farmerId, orderId, transactionType, amount, description = null) {
     // Get current balance

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { farmerAPI } from "../../services/api";
+import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
 
 export default function FarmerProfileScreen() {
   const router = useRouter();
@@ -12,6 +12,11 @@ export default function FarmerProfileScreen() {
   const [profile, setProfile] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // Dashboard metrics
+  const [pendingOrders, setPendingOrders] = useState(0);
+  const [productCount, setProductCount] = useState(0);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [reviewsCount, setReviewsCount] = useState(0);
 
   // Setup fields
   const [fullName, setFullName] = useState("");
@@ -32,9 +37,13 @@ export default function FarmerProfileScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem('authToken');
-      const [p, v] = await Promise.all([
+      const [p, v, pending, prods, ledger, revs] = await Promise.all([
         farmerAPI.getProfile(token),
         farmerAPI.getVerificationStatus(token),
+        farmerOrderAPI.getOrders(token, 'PENDING'),
+        productAPI.getProducts(token, false),
+        farmerAPI.getLedger(token),
+        farmerReviewAPI.getReviews(token, 1, 0),
       ]);
       const prof = p?.data || {};
       setProfile(prof);
@@ -48,6 +57,14 @@ export default function FarmerProfileScreen() {
 
       setStatus(v?.data?.verification_status || null);
       setReason(v?.data?.reason || null);
+      setPendingOrders((pending?.data || []).length || 0);
+      setProductCount((prods?.data || []).filter(p => p.status === 'ACTIVE').length || 0);
+      if (ledger?.success) {
+        const raw = ledger.data;
+        setCurrentBalance(parseFloat(Array.isArray(raw) ? 0 : (raw?.currentBalance || 0)) || 0);
+      }
+      const revList = revs?.data?.reviews || revs?.data || [];
+      setReviewsCount(revList.length || 0);
     } catch (e) {
       console.log(e);
     } finally {
@@ -180,13 +197,30 @@ export default function FarmerProfileScreen() {
             <Text style={styles.role}>Farmer</Text>
           </View>
           <View style={styles.menuSection}>
-            {[{ title: 'My Products', icon: '📦' }, { title: 'My Orders', icon: '📋' }, { title: 'Earnings', icon: '💰' }, { title: 'Reviews', icon: '⭐' }, { title: 'Help & Support', icon: '❓' }].map((item, idx) => (
-              <TouchableOpacity key={idx} style={styles.menuItem}>
-                <Text style={styles.menuIcon}>{item.icon}</Text>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-                <Text style={styles.menuArrow}>›</Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/products')}>
+              <Text style={styles.menuIcon}>📦</Text>
+              <Text style={styles.menuTitle}>My Products</Text>
+              <Text style={styles.menuMeta}>{productCount}</Text>
+              <Text style={styles.menuArrow}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/orders')}>
+              <Text style={styles.menuIcon}>📋</Text>
+              <Text style={styles.menuTitle}>My Orders</Text>
+              <Text style={styles.menuMeta}>{pendingOrders} pending</Text>
+              <Text style={styles.menuArrow}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/earnings')}>
+              <Text style={styles.menuIcon}>💰</Text>
+              <Text style={styles.menuTitle}>Earnings</Text>
+              <Text style={styles.menuMeta}>₱{currentBalance.toFixed(2)}</Text>
+              <Text style={styles.menuArrow}>›</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/reviews')}>
+              <Text style={styles.menuIcon}>⭐</Text>
+              <Text style={styles.menuTitle}>Reviews</Text>
+              <Text style={styles.menuMeta}>{reviewsCount}</Text>
+              <Text style={styles.menuArrow}>›</Text>
+            </TouchableOpacity>
           </View>
         </View>
       )}

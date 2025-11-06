@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,22 +7,53 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { farmerOrderAPI, productAPI, farmerAPI, farmerReviewAPI } from "../../services/api";
 
 export default function FarmerHomeScreen() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [activeProducts, setActiveProducts] = useState(0);
+  const [currentBalance, setCurrentBalance] = useState(0);
+  const [avgRating, setAvgRating] = useState(null);
+  const [recentOrders, setRecentOrders] = useState([]);
 
-  const quickStats = [
-    { label: "Pending Orders", value: "3", color: "#ff9800" },
-    { label: "Total Earnings", value: "₱12,450", color: "#2d5016" },
-    { label: "Active Products", value: "8", color: "#2196f3" },
-    { label: "Rating", value: "4.7 ⭐", color: "#ffc107" },
-  ];
+  useEffect(() => {
+    loadDashboard();
+  }, []);
 
-  const recentOrders = [
-    { id: "#1234", customer: "Priya S.", amount: "₱850", status: "Pending" },
-    { id: "#1235", customer: "Raj K.", amount: "₱1,200", status: "Confirmed" },
-    { id: "#1236", customer: "Anita M.", amount: "₱950", status: "Out for Delivery" },
-  ];
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+
+      const [pendingRes, ordersRes, productsRes, ledgerRes, reviewsRes] = await Promise.all([
+        farmerOrderAPI.getOrders(token, 'PENDING'),
+        farmerOrderAPI.getOrders(token),
+        productAPI.getProducts(token, false),
+        farmerAPI.getLedger(token),
+        farmerReviewAPI.getReviews(token, 5, 0),
+      ]);
+
+      if (pendingRes?.success) setPendingCount((pendingRes.data || []).length);
+      if (ordersRes?.success) setRecentOrders((ordersRes.data || []).slice(0, 5));
+      if (productsRes?.success) setActiveProducts((productsRes.data || []).filter(p => p.status === 'ACTIVE').length || 0);
+      if (ledgerRes?.success) {
+        const raw = ledgerRes.data;
+        setCurrentBalance(parseFloat(Array.isArray(raw) ? 0 : (raw?.currentBalance || 0)) || 0);
+      }
+      if (reviewsRes?.success) {
+        const list = reviewsRes.data?.reviews || reviewsRes.data || [];
+        const ratings = list.map(r => parseFloat(r.rating || 0)).filter(n => n > 0);
+        if (ratings.length > 0) setAvgRating((ratings.reduce((a,b)=>a+b,0)/ratings.length).toFixed(1));
+      }
+    } catch (e) {
+      console.log('Farmer home load error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -32,44 +63,58 @@ export default function FarmerHomeScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        <View style={styles.alertBanner}>
-          <Text style={styles.alertText}>
-            ⚠️ You have 3 new orders waiting for confirmation
-          </Text>
-        </View>
+        {pendingCount > 0 && (
+          <View style={styles.alertBanner}>
+            <Text style={styles.alertText}>
+              ⚠️ You have {pendingCount} new order{pendingCount>1?'s':''} waiting for confirmation
+            </Text>
+          </View>
+        )}
 
         <View style={styles.statsGrid}>
-          {quickStats.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <Text style={[styles.statValue, { color: stat.color }]}>
-                {stat.value}
-              </Text>
-              <Text style={styles.statLabel}>{stat.label}</Text>
-            </View>
-          ))}
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#ff9800' }]}>{pendingCount}</Text>
+            <Text style={styles.statLabel}>Pending Orders</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#2d5016' }]}>₱{currentBalance.toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total Earnings</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#2196f3' }]}>{activeProducts}</Text>
+            <Text style={styles.statLabel}>Active Products</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: '#ffc107' }]}>{avgRating ? `${avgRating} ⭐` : 'N/A'}</Text>
+            <Text style={styles.statLabel}>Rating</Text>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Recent Orders</Text>
         {recentOrders.map((order, index) => (
           <TouchableOpacity
-            key={index}
+            key={order.order_id || index}
             style={styles.orderCard}
             onPress={() => {
-              console.log(`View order ${order.id}`);
+              router.push(`/farmer/orders/${order.order_id}`);
             }}
           >
             <View style={styles.orderHeader}>
-              <Text style={styles.orderId}>{order.id}</Text>
+              <Text style={styles.orderId}>{order.order_number}</Text>
               <View
                 style={[
                   styles.statusBadge,
                   {
                     backgroundColor:
-                      order.status === "Pending"
+                      order.status === "PENDING"
                         ? "#fff3cd"
-                        : order.status === "Confirmed"
+                        : order.status === "CONFIRMED"
                         ? "#d4edda"
-                        : "#cfe2ff",
+                        : order.status === "OUT_FOR_DELIVERY"
+                        ? "#cfe2ff"
+                        : order.status === "CANCELLED"
+                        ? "#f8d7da"
+                        : "#d1e7dd",
                   },
                 ]}
               >
@@ -78,28 +123,32 @@ export default function FarmerHomeScreen() {
                     styles.statusText,
                     {
                       color:
-                        order.status === "Pending"
+                        order.status === "PENDING"
                           ? "#856404"
-                          : order.status === "Confirmed"
+                          : order.status === "CONFIRMED"
                           ? "#155724"
-                          : "#004085",
+                          : order.status === "OUT_FOR_DELIVERY"
+                          ? "#004085"
+                          : order.status === "CANCELLED"
+                          ? "#842029"
+                          : "#0f5132",
                     },
                   ]}
                 >
-                  {order.status}
+                  {order.status.replace('_',' ')}
                 </Text>
               </View>
             </View>
-            <Text style={styles.orderCustomer}>{order.customer}</Text>
-            <Text style={styles.orderAmount}>{order.amount}</Text>
+            <Text style={styles.orderCustomer}>Customer: {order.consumer_name || order.consumer_email || 'Unknown'}</Text>
+            <Text style={styles.orderAmount}>₱{parseFloat(order.total_amount||0).toFixed(2)}</Text>
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => {
-                console.log(`Action for ${order.id}`);
+                router.push(`/farmer/orders/${order.order_id}`);
               }}
             >
               <Text style={styles.actionButtonText}>
-                {order.status === "Pending" ? "Accept Order" : "View Details"}
+                {order.status === "PENDING" ? "Accept Order" : "View Details"}
               </Text>
             </TouchableOpacity>
           </TouchableOpacity>

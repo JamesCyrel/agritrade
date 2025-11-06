@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = __DEV__
-  ? 'http://10.0.0.42:3000/api' // For development - use your computer's IP for physical device
+  ? 'http://10.0.0.39:3000/api' // For development - use your computer's IP for physical device
   : 'https://your-production-api.com/api'; // Update for production
 
 // Helper function to make API calls
@@ -87,6 +87,13 @@ export const farmerAPI = {
   },
   getVerificationStatus: async (token) => {
     return await apiCall('/farmer/verification/status', 'GET', null, token);
+  },
+  // Finance
+  getLedger: async (token) => {
+    return await apiCall('/farmer/ledger', 'GET', null, token);
+  },
+  getPayouts: async (token) => {
+    return await apiCall('/farmer/payouts', 'GET', null, token);
   },
 };
 
@@ -266,6 +273,22 @@ export const consumerAPI = {
   },
   getProductReviews: async (token, productId, limit = 20, offset = 0) => {
     return await apiCall(`/consumer/products/${productId}/reviews?limit=${limit}&offset=${offset}`, 'GET', null, token);
+  },
+  // Favorites
+  getFavorites: async (token) => {
+    return await apiCall('/consumer/favorites', 'GET', null, token);
+  },
+  addFavorite: async (token, productId) => {
+    return await apiCall(`/consumer/favorites/${productId}`, 'POST', null, token);
+  },
+  removeFavorite: async (token, productId) => {
+    return await apiCall(`/consumer/favorites/${productId}`, 'DELETE', null, token);
+  },
+  checkFavorite: async (token, productId) => {
+    return await apiCall(`/consumer/favorites/${productId}/check`, 'GET', null, token);
+  },
+  toggleFavorite: async (token, productId) => {
+    return await apiCall(`/consumer/favorites/${productId}/toggle`, 'POST', null, token);
   },
 };
 

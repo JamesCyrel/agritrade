@@ -66,8 +66,7 @@ export default function FarmerLayout() {
       <Tabs.Screen
         name="reviews"
         options={{
-          title: "Reviews",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>⭐</Text>,
+          href: null, // Hide from tab bar; accessible via profile
         }}
       />
       <Tabs.Screen

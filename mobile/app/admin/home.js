@@ -19,6 +19,7 @@ export default function AdminHomeScreen() {
     gmv: 0,
     pendingReviews: 0,
   });
+  const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
     loadDashboard();
@@ -35,8 +36,11 @@ export default function AdminHomeScreen() {
       const ordersRes = await adminAPI.getAllOrders(token, { limit: 1 });
 
       if (analyticsRes.success && usersRes.success) {
-        const analytics = analyticsRes.data;
+        const analyticsData = analyticsRes.data;
         const users = usersRes.data || [];
+        
+        // Set full analytics data
+        setAnalytics(analyticsData);
         
         // Count pending verifications (farmers with PENDING_REVIEW or PENDING_DOCUMENTS)
         const pendingFarmers = users.filter(
@@ -47,7 +51,7 @@ export default function AdminHomeScreen() {
         setStats({
           totalUsers: users.length,
           activeOrders: ordersRes.success ? (ordersRes.pagination?.total || 0) : 0,
-          gmv: analytics.gmv || 0,
+          gmv: analyticsData.gmv || 0,
           pendingReviews: pendingFarmers.length,
         });
       }
@@ -115,6 +119,101 @@ export default function AdminHomeScreen() {
             <Text style={styles.statLabel}>Pending Verifications</Text>
           </View>
         </View>
+
+        {/* Analytics Section */}
+        {analytics && (
+          <>
+            <View style={styles.statsContainer}>
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>{formatCurrency(analytics.platformRevenue || 0)}</Text>
+                <Text style={styles.statLabel}>Platform Revenue</Text>
+              </View>
+              {analytics.orders?.total_orders > 0 && (
+                <View style={styles.statCard}>
+                  <Text style={styles.statNumber}>
+                    {formatCurrency((analytics.gmv || 0) / analytics.orders.total_orders)}
+                  </Text>
+                  <Text style={styles.statLabel}>Avg Order Value</Text>
+                </View>
+              )}
+            </View>
+
+            {/* User Registrations by Role */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>User Registrations by Role</Text>
+              {analytics.userRegistrations?.map((reg, index) => (
+                <View key={index} style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>{reg.role}</Text>
+                  <Text style={styles.metricValue}>{reg.count || 0}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Order Statistics */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Order Statistics</Text>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Completed Orders</Text>
+                <Text style={styles.metricValue}>{analytics.orders?.completed_orders || 0}</Text>
+              </View>
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Cancelled Orders</Text>
+                <Text style={styles.metricValue}>{analytics.orders?.cancelled_orders || 0}</Text>
+              </View>
+              {analytics.orders?.total_orders > 0 && (
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Average Order Value</Text>
+                  <Text style={styles.metricValue}>
+                    {formatCurrency((analytics.gmv || 0) / analytics.orders.total_orders)}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Top Products */}
+            {analytics.popularProducts && analytics.popularProducts.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Most Popular Products</Text>
+                {analytics.popularProducts.slice(0, 5).map((product, index) => (
+                  <View key={product.product_id || index} style={styles.metricCard}>
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{product.variety_name}</Text>
+                      <Text style={styles.productType}>{product.rice_type}</Text>
+                    </View>
+                    <View style={styles.productStats}>
+                      <Text style={styles.productRevenue}>
+                        {formatCurrency(parseFloat(product.total_revenue || 0))}
+                      </Text>
+                      <Text style={styles.productQuantity}>
+                        {parseFloat(product.total_quantity_sold || 0).toFixed(1)} kg
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* Top Farmers */}
+            {analytics.topFarmers && analytics.topFarmers.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Top Performing Farmers</Text>
+                {analytics.topFarmers.slice(0, 5).map((farmer, index) => (
+                  <View key={farmer.farmer_id || index} style={styles.metricCard}>
+                    <View style={styles.productInfo}>
+                      <Text style={styles.productName}>{farmer.farm_name || farmer.full_name}</Text>
+                      <Text style={styles.productType}>{farmer.total_orders} orders</Text>
+                    </View>
+                    <View style={styles.productStats}>
+                      <Text style={styles.productRevenue}>
+                        {formatCurrency(parseFloat(farmer.total_revenue || 0))}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -173,6 +272,65 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   statLabel: {
+    fontSize: 12,
+    color: "#666",
+  },
+  section: {
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 12,
+  },
+  metricCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  metricLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  metricValue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2d5016",
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 4,
+  },
+  productType: {
+    fontSize: 12,
+    color: "#666",
+  },
+  productStats: {
+    alignItems: "flex-end",
+  },
+  productRevenue: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2d5016",
+    marginBottom: 4,
+  },
+  productQuantity: {
     fontSize: 12,
     color: "#666",
   },

@@ -1,23 +1,105 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { farmerAPI } from "../../services/api";
 
 export default function FarmerEarningsScreen() {
-  const earnings = [
-    { period: "This Week", amount: "₱12,450", orders: 15 },
-    { period: "This Month", amount: "₱45,680", orders: 58 },
-    { period: "Total", amount: "₱2,34,500", orders: 312 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [ledger, setLedger] = useState([]);
+  const [payouts, setPayouts] = useState([]);
+  const [currentBalance, setCurrentBalance] = useState(0);
 
-  const recentPayouts = [
-    { date: "15 Jan 2024", amount: "₱12,450", status: "Completed" },
-    { date: "8 Jan 2024", amount: "₱10,200", status: "Completed" },
-    { date: "1 Jan 2024", amount: "₱8,900", status: "Completed" },
-  ];
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+      const [ledgerRes, payoutsRes] = await Promise.all([
+        farmerAPI.getLedger(token),
+        farmerAPI.getPayouts(token),
+      ]);
+      if (ledgerRes?.success) {
+        const raw = ledgerRes.data;
+        const list = Array.isArray(raw) ? raw : (raw?.ledger || raw?.rows || raw?.items || []);
+        setLedger(list);
+        const bal = Array.isArray(raw) ? 0 : (raw?.currentBalance || 0);
+        setCurrentBalance(parseFloat(bal) || 0);
+      } else {
+        setLedger([]);
+        setCurrentBalance(0);
+      }
+      if (payoutsRes?.success) {
+        const rawP = payoutsRes.data;
+        const listP = Array.isArray(rawP) ? rawP : (rawP?.payouts || rawP?.rows || rawP?.items || []);
+        setPayouts(listP);
+      } else {
+        setPayouts([]);
+      }
+    } catch (e) {
+      console.error("Earnings load error:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const formatPeso = (n) => `₱${parseFloat(n || 0).toFixed(2)}`;
+  const isSameWeek = (date) => {
+    const d = new Date(date);
+    const now = new Date();
+    const onejan = new Date(now.getFullYear(), 0, 1);
+    const weekNow = Math.ceil((((now - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+    const weekD = Math.ceil((((d - new Date(d.getFullYear(), 0, 1)) / 86400000) + new Date(d.getFullYear(), 0, 1).getDay() + 1) / 7);
+    return d.getFullYear() === now.getFullYear() && weekD === weekNow;
+  };
+  const isSameMonth = (date) => {
+    const d = new Date(date);
+    const now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  };
+
+  // Compute earnings from ledger entries (EARNING positive, COMMISSION negative, REFUND negative, PAYOUT negative)
+  const stats = useMemo(() => {
+    let week = 0, weekOrders = 0;
+    let month = 0, monthOrders = 0;
+    let total = currentBalance || 0; // use server balance for total
+    let totalOrders = 0;
+    (Array.isArray(ledger) ? ledger : []).forEach((entry) => {
+      const amount = parseFloat(entry.amount || 0);
+      const type = entry.transaction_type;
+      const signed = (type === 'EARNING') ? amount : -Math.abs(amount);
+      if (type === 'EARNING') totalOrders += 1;
+      if (isSameWeek(entry.created_at)) {
+        week += signed;
+        if (type === 'EARNING') weekOrders += 1;
+      }
+      if (isSameMonth(entry.created_at)) {
+        month += signed;
+        if (type === 'EARNING') monthOrders += 1;
+      }
+    });
+    return {
+      week: { amount: week, orders: weekOrders },
+      month: { amount: month, orders: monthOrders },
+      total: { amount: total, orders: totalOrders },
+    };
+  }, [ledger]);
 
   return (
     <View style={styles.container}>
@@ -26,30 +108,56 @@ export default function FarmerEarningsScreen() {
         <Text style={styles.headerSubtitle}>Track your income</Text>
       </View>
 
-      <ScrollView style={styles.content}>
-        <View style={styles.statsGrid}>
-          {earnings.map((earning, index) => (
-            <View key={index} style={styles.statCard}>
-              <Text style={styles.statValue}>{earning.amount}</Text>
-              <Text style={styles.statLabel}>{earning.period}</Text>
-              <Text style={styles.statOrders}>{earning.orders} orders</Text>
-            </View>
-          ))}
+      {loading ? (
+        <View style={[styles.content, styles.center]}>
+          <ActivityIndicator size="large" color="#2d5016" />
         </View>
-
-        <Text style={styles.sectionTitle}>Recent Payouts</Text>
-        {recentPayouts.map((payout, index) => (
-          <View key={index} style={styles.payoutCard}>
-            <View style={styles.payoutInfo}>
-              <Text style={styles.payoutDate}>{payout.date}</Text>
-              <Text style={styles.payoutAmount}>{payout.amount}</Text>
+      ) : (
+        <ScrollView
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{formatPeso(stats.week.amount)}</Text>
+              <Text style={styles.statLabel}>This Week</Text>
+              <Text style={styles.statOrders}>{stats.week.orders} orders</Text>
             </View>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>{payout.status}</Text>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{formatPeso(stats.month.amount)}</Text>
+              <Text style={styles.statLabel}>This Month</Text>
+              <Text style={styles.statOrders}>{stats.month.orders} orders</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{formatPeso(stats.total.amount)}</Text>
+              <Text style={styles.statLabel}>Total</Text>
+              <Text style={styles.statOrders}>{stats.total.orders} orders</Text>
             </View>
           </View>
-        ))}
-      </ScrollView>
+
+          <Text style={styles.sectionTitle}>Recent Payouts</Text>
+          {payouts.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No payouts yet</Text>
+            </View>
+          ) : (
+            payouts.map((p) => (
+              <View key={p.payout_id} style={styles.payoutCard}>
+                <View style={styles.payoutInfo}>
+                  <Text style={styles.payoutDate}>{new Date(p.payout_date || p.created_at).toLocaleDateString()}</Text>
+                  <Text style={styles.payoutAmount}>{formatPeso(p.net_amount || p.total_earnings || 0)}</Text>
+                </View>
+                <View style={[styles.statusBadge, 
+                  p.status === 'COMPLETED' ? styles.badgeSuccess : 
+                  p.status === 'FAILED' ? styles.badgeDanger : styles.badgePending]}
+                >
+                  <Text style={styles.statusText}>{(p.status || 'PENDING').toUpperCase()}</Text>
+                </View>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -79,6 +187,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
+  center: { alignItems: "center", justifyContent: "center" },
   statsGrid: {
     marginBottom: 24,
   },
@@ -144,15 +253,19 @@ const styles = StyleSheet.create({
     color: "#2d5016",
   },
   statusBadge: {
-    backgroundColor: "#d4edda",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
   },
+  badgeSuccess: { backgroundColor: "#d4edda" },
+  badgeDanger: { backgroundColor: "#f8d7da" },
+  badgePending: { backgroundColor: "#fff3cd" },
   statusText: {
     fontSize: 12,
     fontWeight: "600",
     color: "#155724",
   },
+  emptyState: { alignItems: "center", padding: 16 },
+  emptyStateText: { color: "#666" },
 });
 

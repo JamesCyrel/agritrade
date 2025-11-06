@@ -1,18 +1,77 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
 } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { consumerAPI } from "../../services/api";
 
 export default function ConsumerFavoritesScreen() {
-  const favorites = [
-    { name: "Basmati Rice", farmer: "Green Valley Farm", price: "₱120/kg", rating: "4.8" },
-    { name: "Sona Masuri", farmer: "Organic Rice Co.", price: "₱95/kg", rating: "4.9" },
-    { name: "Jasmine Rice", farmer: "Premium Paddy", price: "₱110/kg", rating: "4.7" },
-  ];
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [favorites, setFavorites] = useState([]);
+
+  const loadFavorites = async () => {
+    try {
+      setLoading(true);
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.getFavorites(token);
+      if (res.success) {
+        setFavorites(res.data || []);
+      } else {
+        Alert.alert("Error", res.message || "Failed to load favorites");
+      }
+    } catch (error) {
+      console.error("Load favorites error:", error);
+      Alert.alert("Error", "Failed to load favorites");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadFavorites();
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadFavorites();
+  };
+
+  const handleRemoveFavorite = async (productId) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.removeFavorite(token, productId);
+      if (res.success) {
+        setFavorites(favorites.filter((fav) => fav.product_id !== productId));
+      } else {
+        Alert.alert("Error", res.message || "Failed to remove favorite");
+      }
+    } catch (error) {
+      console.error("Remove favorite error:", error);
+      Alert.alert("Error", "Failed to remove favorite");
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#2d5016" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -21,23 +80,52 @@ export default function ConsumerFavoritesScreen() {
         <Text style={styles.headerSubtitle}>Your saved products</Text>
       </View>
 
-      <ScrollView style={styles.content}>
-        {favorites.map((item, index) => (
-          <TouchableOpacity key={index} style={styles.favoriteCard}>
-            <View style={styles.itemImage}>
-              <Text style={styles.itemImagePlaceholder}>🌾</Text>
-            </View>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.name}</Text>
-              <Text style={styles.itemFarmer}>{item.farmer}</Text>
-              <Text style={styles.itemRating}>⭐ {item.rating}</Text>
-              <Text style={styles.itemPrice}>{item.price}</Text>
-            </View>
-            <TouchableOpacity style={styles.heartButton}>
-              <Text style={styles.heartIcon}>❤️</Text>
+      <ScrollView
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#2d5016"]} />}
+      >
+        {favorites.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyStateIcon}>💔</Text>
+            <Text style={styles.emptyStateText}>No favorites yet</Text>
+            <Text style={styles.emptyStateSubtext}>Start adding products to your favorites!</Text>
+          </View>
+        ) : (
+          favorites.map((item) => (
+            <TouchableOpacity
+              key={item.product_id}
+              style={styles.favoriteCard}
+              onPress={() => router.push(`/consumer/products/${item.product_id}`)}
+            >
+              {item.images && item.images.length > 0 ? (
+                <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+              ) : (
+                <View style={styles.itemImage}>
+                  <Text style={styles.itemImagePlaceholder}>🌾</Text>
+                </View>
+              )}
+              <View style={styles.itemInfo}>
+                <Text style={styles.itemName}>{item.variety_name}</Text>
+                <Text style={styles.itemFarmer}>{item.farm_name || item.farmer_name}</Text>
+                {item.average_rating > 0 && (
+                  <Text style={styles.itemRating}>
+                    ⭐ {parseFloat(item.average_rating).toFixed(1)} ({item.total_reviews || 0})
+                  </Text>
+                )}
+                <Text style={styles.itemPrice}>₱{item.price_per_kg}/kg</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.heartButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleRemoveFavorite(item.product_id);
+                }}
+              >
+                <Text style={styles.heartIcon}>❤️</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
-          </TouchableOpacity>
-        ))}
+          ))
+        )}
       </ScrollView>
     </View>
   );
@@ -123,6 +211,27 @@ const styles = StyleSheet.create({
   },
   heartIcon: {
     fontSize: 24,
+  },
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+    marginTop: 100,
+  },
+  emptyStateIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyStateText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
   },
 });
 

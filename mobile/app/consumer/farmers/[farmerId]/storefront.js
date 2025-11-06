@@ -19,6 +19,7 @@ export default function FarmerStorefrontScreen() {
   const farmerId = params.farmerId;
   const [loading, setLoading] = useState(true);
   const [storefront, setStorefront] = useState(null);
+  const [favoriteStatus, setFavoriteStatus] = useState({});
 
   useEffect(() => {
     loadStorefront();
@@ -41,6 +42,31 @@ export default function FarmerStorefrontScreen() {
       router.back();
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleFavorite = async (productId, e) => {
+    e.stopPropagation();
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.toggleFavorite(token, productId);
+      if (res.success) {
+        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+      }
+    } catch (error) {
+      console.error("Toggle favorite error:", error);
+    }
+  };
+
+  const checkFavoriteStatus = async (productId) => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.checkFavorite(token, productId);
+      if (res.success) {
+        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+      }
+    } catch (error) {
+      console.error("Check favorite error:", error);
     }
   };
 
@@ -86,34 +112,51 @@ export default function FarmerStorefrontScreen() {
             <Text style={styles.emptyStateText}>No products available</Text>
           </View>
         ) : (
-          products.map((product) => (
-            <TouchableOpacity
-              key={product.product_id}
-              style={styles.productCard}
-              onPress={() => router.push(`/consumer/products/${product.product_id}`)}
-            >
-              {product.images && product.images.length > 0 ? (
-                <Image source={{ uri: product.images[0] }} style={styles.productImage} />
-              ) : (
-                <View style={styles.productImage}>
-                  <Text style={styles.productImagePlaceholder}>🌾</Text>
+          products.map((product) => {
+            // Check favorite status when product is first rendered
+            if (favoriteStatus[product.product_id] === undefined) {
+              checkFavoriteStatus(product.product_id);
+            }
+
+            return (
+              <TouchableOpacity
+                key={product.product_id}
+                style={styles.productCard}
+                onPress={() => router.push(`/consumer/products/${product.product_id}`)}
+              >
+                <View style={styles.productImageContainer}>
+                  {product.images && product.images.length > 0 ? (
+                    <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                  ) : (
+                    <View style={styles.productImage}>
+                      <Text style={styles.productImagePlaceholder}>🌾</Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    style={styles.favoriteButton}
+                    onPress={(e) => handleToggleFavorite(product.product_id, e)}
+                  >
+                    <Text style={styles.favoriteIcon}>
+                      {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-              <View style={styles.productDetails}>
-                <Text style={styles.productName}>{product.variety_name}</Text>
-                <Text style={styles.productType}>{product.rice_type}</Text>
-                <Text style={styles.productPrice}>₱{product.price_per_kg}/kg</Text>
-                <Text style={styles.productAvailability}>
-                  {product.available_quantity} {product.quantity_unit} available
-                </Text>
-                {product.average_rating > 0 && (
-                  <Text style={styles.productRating}>
-                    ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+                <View style={styles.productDetails}>
+                  <Text style={styles.productName}>{product.variety_name}</Text>
+                  <Text style={styles.productType}>{product.rice_type}</Text>
+                  <Text style={styles.productPrice}>₱{product.price_per_kg}/kg</Text>
+                  <Text style={styles.productAvailability}>
+                    {product.available_quantity} {product.quantity_unit} available
                   </Text>
-                )}
-              </View>
-            </TouchableOpacity>
-          ))
+                  {product.average_rating > 0 && (
+                    <Text style={styles.productRating}>
+                      ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews})
+                    </Text>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
       </View>
     </ScrollView>
@@ -159,6 +202,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  productImageContainer: {
+    width: 100,
+    height: 100,
+    position: "relative",
+    marginRight: 12,
+  },
   productImage: {
     width: 100,
     height: 100,
@@ -166,7 +215,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#f0f0f0",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    backgroundColor: "rgba(255, 255, 255, 0.9)",
+    borderRadius: 14,
+    width: 28,
+    height: 28,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  favoriteIcon: {
+    fontSize: 16,
   },
   productImagePlaceholder: { fontSize: 40 },
   productDetails: { flex: 1 },

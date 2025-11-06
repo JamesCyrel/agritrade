@@ -131,7 +131,7 @@ exports.rejectOrder = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status } = req.body;
+    let { status } = req.body;
     const farmerId = req.user.userId;
     
     if (!status) {
@@ -141,6 +141,11 @@ exports.updateOrderStatus = async (req, res) => {
       });
     }
     
+    // Normalize status label from UI ('COMPLETED' -> 'DELIVERED')
+    if (status === 'COMPLETED') {
+      status = 'DELIVERED';
+    }
+
     const order = await Order.updateStatus(orderId, farmerId, status);
     
     // Send notification to consumer based on status (OM-6)
@@ -168,6 +173,36 @@ exports.updateOrderStatus = async (req, res) => {
           notificationMessage,
           order.order_id
         );
+
+        // Record earnings upon delivery (ensure single write for both DIGITAL and COD)
+        try {
+          const Payment = require('../models/Payment');
+          const alreadyRecorded = await Payment.hasEarningForOrder(order.farmer_id, order.order_id);
+          if (!alreadyRecorded) {
+            const received = parseFloat(order.total_amount || 0);
+            const commissionRate = 0.05; // configurable commission
+            const commissionAmount = received * commissionRate;
+            const earningAmount = received - commissionAmount;
+
+            await Payment.addLedgerEntry(
+              order.farmer_id,
+              order.order_id,
+              'EARNING',
+              earningAmount,
+              `Order ${order.order_number} - Gross earning`
+            );
+
+            await Payment.addLedgerEntry(
+              order.farmer_id,
+              order.order_id,
+              'COMMISSION',
+              -commissionAmount,
+              `Order ${order.order_number} - Platform commission (${commissionRate * 100}%)`
+            );
+          }
+        } catch (ledgerErr) {
+          console.error('Error recording COD earnings:', ledgerErr);
+        }
       }
     } catch (notifError) {
       console.error('Error sending notification:', notifError);

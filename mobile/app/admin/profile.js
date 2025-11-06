@@ -69,7 +69,6 @@ export default function AdminProfileScreen() {
           <Text style={styles.name}>
             {user?.full_name || user?.email || "Administrator"}
           </Text>
-          <Text style={styles.email}>{user?.email || user?.phone || "-"}</Text>
           <View style={styles.roleBadge}>
             <Text style={styles.roleText}>{user?.role || "ADMIN"}</Text>
           </View>
@@ -78,10 +77,6 @@ export default function AdminProfileScreen() {
         {/* Account Details */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account Details</Text>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Email:</Text>
-            <Text style={styles.detailValue}>{user?.email || "-"}</Text>
-          </View>
           {user?.phone && (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Phone:</Text>
