@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
 
 export default function FarmerProfileScreen() {
@@ -12,6 +13,8 @@ export default function FarmerProfileScreen() {
   const [profile, setProfile] = useState({});
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [locLoading, setLocLoading] = useState(false);
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
   // Dashboard metrics
   const [pendingOrders, setPendingOrders] = useState(0);
   const [productCount, setProductCount] = useState(0);
@@ -154,6 +157,25 @@ export default function FarmerProfileScreen() {
     }
   };
 
+  const captureLocation = async () => {
+    try {
+      setLocLoading(true);
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission denied', 'Location permission is required to capture farm location.');
+        setLocLoading(false);
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({});
+      setCoords({ lat: location.coords.latitude, lon: location.coords.longitude });
+      Alert.alert('Success', 'Location captured successfully!');
+    } catch (e) {
+      Alert.alert('Location Error', 'Could not get your location.');
+    } finally {
+      setLocLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -222,30 +244,81 @@ export default function FarmerProfileScreen() {
           </View>
           <View style={styles.menuSection}>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/products')}>
-              <Text style={styles.menuIcon}>📦</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>My Products</Text>
               <Text style={styles.menuMeta}>{productCount}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/orders')}>
-              <Text style={styles.menuIcon}>📋</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>My Orders</Text>
               <Text style={styles.menuMeta}>{pendingOrders} pending</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/earnings')}>
-              <Text style={styles.menuIcon}>💰</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>Earnings</Text>
               <Text style={styles.menuMeta}>₱{currentBalance.toFixed(2)}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/reviews')}>
-              <Text style={styles.menuIcon}>⭐</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>Reviews</Text>
               <Text style={styles.menuMeta}>{reviewsCount}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => setShowProfileSetup(!showProfileSetup)}>
+              <Text style={styles.menuIcon}></Text>
+              <Text style={styles.menuTitle}>Profile Setup</Text>
+              <Text style={styles.menuMeta}>{showProfileSetup ? '▼' : '▶'}</Text>
+            </TouchableOpacity>
           </View>
+
+          {showProfileSetup && (
+            <View style={styles.setupSection}>
+              <Text style={styles.sectionTitle}>Profile Information</Text>
+              
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Your full name" />
+              
+              <Text style={styles.label}>Farm Name</Text>
+              <TextInput style={styles.input} value={farmName} onChangeText={setFarmName} placeholder="e.g., Green Valley Farm" />
+              
+              <Text style={styles.label}>Operational Address</Text>
+              <TextInput style={[styles.input, styles.multiline]} value={address} onChangeText={setAddress} placeholder="Full address" multiline numberOfLines={3} />
+              
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Latitude</Text>
+                  <TextInput style={styles.input} value={coords.lat ? String(coords.lat) : ""} editable={false} placeholder="Tap capture" />
+                </View>
+                <View style={{ width: 12 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>Longitude</Text>
+                  <TextInput style={styles.input} value={coords.lon ? String(coords.lon) : ""} editable={false} placeholder="Tap capture" />
+                </View>
+              </View>
+              
+              <TouchableOpacity style={styles.captureButton} onPress={captureLocation} disabled={locLoading}>
+                {locLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.captureText}>Capture GPS Location</Text>}
+              </TouchableOpacity>
+
+              <Text style={styles.sectionTitle}>Bank Details</Text>
+              
+              <Text style={styles.label}>Account Number</Text>
+              <TextInput style={styles.input} value={bankAccountNumber} onChangeText={setBankAccountNumber} placeholder="Account Number" keyboardType="number-pad" />
+              
+              <Text style={styles.label}>Bank Name</Text>
+              <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="Bank Name" />
+              
+              <Text style={styles.label}>Branch Code</Text>
+              <TextInput style={styles.input} value={branchCode} onChangeText={setBranchCode} placeholder="Branch Code" />
+              
+              <TouchableOpacity style={styles.saveButton} onPress={saveProfile} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}> Save Profile</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       )}
 
@@ -295,5 +368,10 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 80, textAlignVertical: 'top' },
   saveButton: { backgroundColor: '#2d5016', borderRadius: 8, padding: 16, alignItems: 'center', marginTop: 16 },
   saveText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  menuMeta: { fontSize: 14, color: '#666', marginRight: 8 },
+  setupSection: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, marginTop: -12 },
+  row: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  captureButton: { backgroundColor: '#2d5016', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 12 },
+  captureText: { color: '#fff', fontWeight: '600' },
 });
 

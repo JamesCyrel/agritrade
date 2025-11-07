@@ -131,7 +131,10 @@ export default function SearchScreen() {
           autoFocus
         />
         <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilters(true)}>
-          <Text style={styles.filterIcon}>🔍</Text>
+          <Text style={styles.filterIcon}><Image 
+              source={require('../../assets/icons/search.png')} 
+              style={{ width: 24, height: 24, tintColor: '#fff' }}
+            /></Text>
         </TouchableOpacity>
       </View>
 
@@ -373,7 +376,7 @@ const styles = StyleSheet.create({
   backButton: { marginRight: 12 },
   backButtonText: { fontSize: 24, color: "#2d5016" },
   searchInput: { flex: 1, backgroundColor: "#f5f5f5", borderRadius: 8, padding: 10, fontSize: 14 },
-  filterButton: { marginLeft: 8, padding: 8 },
+  filterButton: { marginLeft: 8, padding: 8, backgroundColor: '#2d5016', borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
   filterIcon: { fontSize: 20 },
   sortContainer: {
     flexDirection: "row",

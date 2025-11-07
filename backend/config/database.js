@@ -1,16 +1,37 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// If Supabase is configured, disable direct pg pool usage to avoid localhost:5432 connections
-if (process.env.SUPABASE_URL) {
-  console.warn('ℹ️  Supabase detected. Disabling local pg pool. Refactor callers to use supabase client.');
-  const errorProxy = new Proxy({}, {
-    get() {
-      throw new Error('Deprecated: pg pool is disabled during Supabase migration. Import backend/config/supabase and use Supabase queries instead.');
+// Mock pool that returns empty results when database is not configured
+const createMockPool = () => {
+  return {
+    query: async () => ({ rows: [], rowCount: 0 }),
+    connect: async () => ({ query: async () => ({ rows: [], rowCount: 0 }), release: () => {} }),
+    on: () => {},
+  };
+};
+
+// If Supabase is configured, use Supabase's direct database connection
+if (process.env.SUPABASE_URL && process.env.SUPABASE_DB_URL) {
+  console.log('ℹ️  Using Supabase database connection for complex queries');
+  const pool = new Pool({
+    connectionString: process.env.SUPABASE_DB_URL,
+    ssl: {
+      rejectUnauthorized: false
     }
   });
-  module.exports = errorProxy;
-} else {
+
+  // Test connection
+  pool.on('connect', () => {
+    console.log('✅ Connected to Supabase PostgreSQL database');
+  });
+
+  pool.on('error', (err) => {
+    console.error('❌ Unexpected error on Supabase database client', err);
+  });
+
+  module.exports = pool;
+} else if (process.env.DB_HOST) {
+  // Local PostgreSQL connection
   const pool = new Pool({
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
@@ -39,5 +60,9 @@ if (process.env.SUPABASE_URL) {
   });
 
   module.exports = pool;
+} else {
+  console.warn('⚠️  No database configuration found. Using mock pool (empty results).');
+  console.warn('⚠️  Set SUPABASE_DB_URL or DB_HOST in .env to enable database features.');
+  module.exports = createMockPool();
 }
 

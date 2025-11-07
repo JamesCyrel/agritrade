@@ -184,7 +184,7 @@ export default function FarmerOrdersScreen() {
       >
         {orders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📦</Text>
+            <Text style={styles.emptyStateIcon}></Text>
             <Text style={styles.emptyStateText}>No orders found</Text>
             <Text style={styles.emptyStateSubtext}>
               {selectedTab ? `No ${getStatusLabelForHeader(selectedTab).toLowerCase()} orders yet` : "You don't have any orders yet"}

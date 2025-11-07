@@ -337,7 +337,7 @@ export default function ConsumerProfileScreen() {
       {/* Addresses Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📍 Delivery Addresses</Text>
+          <Text style={styles.sectionTitle}>Delivery Addresses</Text>
           <TouchableOpacity onPress={() => openAddressModal()} style={styles.addButton}>
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
@@ -373,7 +373,7 @@ export default function ConsumerProfileScreen() {
       {/* Payment Methods Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>💳 Payment Methods</Text>
+          <Text style={styles.sectionTitle}>Payment Methods</Text>
           <TouchableOpacity onPress={() => openPaymentModal()} style={styles.addButton}>
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>

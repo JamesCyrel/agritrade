@@ -13,8 +13,8 @@ exports.getProfile = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const profile = await Profile.upsertFarmerProfile(req.user.userId, req.body);
-    // keep status at PENDING_DOCUMENTS after profile update
-    await Profile.setVerificationStatus(req.user.userId, 'PENDING_DOCUMENTS');
+    // Don't change verification status on profile update
+    // Let farmers work on their profile without appearing in admin list
     res.json({ success: true, message: 'Profile updated', data: profile });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to update profile' });
@@ -37,10 +37,11 @@ exports.uploadDocuments = async (req, res) => {
       results.push(saved);
     }
 
-    // set status to PENDING_REVIEW
+    // Set status to PENDING_REVIEW - farmer is now submitting for verification
+    // This is when they should appear in the admin verification list
     await Profile.setVerificationStatus(req.user.userId, 'PENDING_REVIEW');
 
-    res.json({ success: true, message: 'Documents uploaded', data: results });
+    res.json({ success: true, message: 'Documents uploaded and submitted for review', data: results });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to upload documents' });
   }

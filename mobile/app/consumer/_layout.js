@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { Text, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function ConsumerLayout() {
@@ -25,35 +25,60 @@ export default function ConsumerLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/home.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: "Orders",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📦</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/orders.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="cart"
         options={{
           title: "Cart",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🛒</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/cart.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="favorites"
         options={{
           title: "Favorites",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>❤️</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/favorites.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/profile.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       {/* Hide these screens from tab bar - they're accessible via navigation */}
