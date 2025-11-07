@@ -23,14 +23,14 @@ class Profile {
       longitude: longitude || null,
     };
 
-    // Preserve existing verification_status or default to PENDING_DOCUMENTS
+    // Preserve existing verification_status or default to NOT_SUBMITTED
     const { data: existing } = await supabase
       .from('profiles')
       .select('verification_status')
       .eq('user_id', userId)
       .limit(1);
     if (!payload.verification_status) {
-      payload.verification_status = existing && existing[0]?.verification_status || 'PENDING_DOCUMENTS';
+      payload.verification_status = existing && existing[0]?.verification_status || 'NOT_SUBMITTED';
     }
 
     const { data, error } = await supabase
@@ -47,7 +47,7 @@ class Profile {
       .from('profiles')
       .select('profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
     if (error) throw error;
     return data || null;
   }

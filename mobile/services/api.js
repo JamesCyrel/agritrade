@@ -1,6 +1,6 @@
 // API Configuration
 const API_BASE_URL = __DEV__
-  ? 'http://10.251.254.47:8081/api' // For development - use your computer's IP and backend port
+  ? 'http://10.0.0.41:3000/api' // For development - use your computer's IP and backend port (3000)
   : 'https://your-production-api.com/api'; // Update for production
 
 // Helper function to make API calls

@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   bank_account_number VARCHAR(50),
   bank_name VARCHAR(100),
   branch_code VARCHAR(20),
-  verification_status VARCHAR(20) DEFAULT 'PENDING_DOCUMENTS' CHECK (verification_status IN ('PENDING_DOCUMENTS', 'PENDING_REVIEW', 'APPROVED', 'REJECTED')),
+  verification_status VARCHAR(20) DEFAULT 'NOT_SUBMITTED' CHECK (verification_status IN ('NOT_SUBMITTED', 'PENDING_DOCUMENTS', 'PENDING_REVIEW', 'APPROVED', 'REJECTED')),
   verification_reason TEXT,
   latitude DECIMAL(10,7),
   longitude DECIMAL(10,7),
@@ -40,6 +40,16 @@ DO $$ BEGIN
   BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7); EXCEPTION WHEN duplicate_column THEN NULL; END;
   BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7); EXCEPTION WHEN duplicate_column THEN NULL; END;
 END $$;
+
+-- VERIFICATION DOCUMENTS
+CREATE TABLE IF NOT EXISTS verification_documents (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+  doc_type VARCHAR(50) NOT NULL,
+  file_data TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_verification_documents_user_id ON verification_documents(user_id);
 
 -- CONSUMER TABLES
 CREATE TABLE IF NOT EXISTS consumer_addresses (

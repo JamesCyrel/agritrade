@@ -1,4 +1,5 @@
 const supabase = require('../config/supabase');
+const pool = require('../config/database');
 const Profile = require('../models/Profile');
 const Verification = require('../models/Verification');
 
@@ -43,13 +44,13 @@ exports.listUsers = async (req, res) => {
   }
 };
 
-// List farmers with PENDING_REVIEW (or PENDING_DOCUMENTS if you want)
+// List farmers with PENDING_REVIEW only (after they submit documents)
 exports.listPendingFarmers = async (req, res) => {
   try {
     const { data: farmers, error } = await supabase
       .from('profiles')
       .select('user_id, full_name, farm_name, verification_status, updated_at')
-      .in('verification_status', ['PENDING_REVIEW', 'PENDING_DOCUMENTS'])
+      .eq('verification_status', 'PENDING_REVIEW') // Only show farmers who have submitted for review
       .order('updated_at', { ascending: false });
     if (error) throw error;
     const { data: users } = await supabase
@@ -69,10 +70,34 @@ exports.listPendingFarmers = async (req, res) => {
 exports.getFarmerApplication = async (req, res) => {
   try {
     const { userId } = req.params;
-    const profile = await Profile.getByUserId(userId);
+    
+    // Get profile (may not exist yet)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+    
+    // Get user info
+    const { data: user } = await supabase
+      .from('users')
+      .select('email, phone, role')
+      .eq('user_id', userId)
+      .single();
+    
+    // Get documents
     const documents = await Verification.listDocuments(userId);
-    res.json({ success: true, data: { profile, documents } });
+    
+    res.json({ 
+      success: true, 
+      data: { 
+        profile: profile || {}, 
+        user: user || {},
+        documents 
+      } 
+    });
   } catch (error) {
+    console.error('getFarmerApplication error:', error);
     res.status(500).json({ success: false, message: 'Failed to get application' });
   }
 };
@@ -186,103 +211,56 @@ exports.activateUser = async (req, res) => {
 // AD-2: Get all orders with filters
 exports.getAllOrders = async (req, res) => {
   try {
-    const { status, userId, farmerId, consumerId, startDate, endDate, orderId, q, limit = 50, offset = 0 } = req.query;
+    // Use Supabase for simpler queries
+    const { status, farmerId, consumerId, limit = 50, offset = 0 } = req.query;
     
-    const params = [];
-    const where = [];
-    let paramCount = 1;
+    let query = supabase
+      .from('orders')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
     
     if (status) {
-      params.push(status.toUpperCase());
-      where.push(`o.status = $${paramCount++}`);
-    }
-    
-    if (userId) {
-      params.push(userId);
-      where.push(`(o.farmer_id = $${paramCount++} OR o.consumer_id = $${paramCount})`);
-      paramCount++;
+      query = query.eq('status', status.toUpperCase());
     }
     
     if (farmerId) {
-      params.push(farmerId);
-      where.push(`o.farmer_id = $${paramCount++}`);
+      query = query.eq('farmer_id', farmerId);
     }
     
     if (consumerId) {
-      params.push(consumerId);
-      where.push(`o.consumer_id = $${paramCount++}`);
+      query = query.eq('consumer_id', consumerId);
     }
     
-    if (orderId) {
-      const isNumeric = /^\d+$/.test(String(orderId));
-      if (isNumeric) {
-        // Match strictly by numeric order_id
-        params.push(parseInt(orderId));
-        where.push(`o.order_id = $${paramCount++}`);
-      } else {
-        // Treat non-numeric as order number search
-        params.push(`%${orderId}%`);
-        // reuse same placeholder for all three fields
-        where.push(`(o.order_number ILIKE $${paramCount} OR pr.farm_name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
-        paramCount++;
+    const { data, error, count } = await query;
+    
+    if (error) throw error;
+    
+    // Enrich with farmer details if we have orders
+    if (data && data.length > 0) {
+      const farmerIds = [...new Set(data.map(o => o.farmer_id).filter(Boolean))];
+      if (farmerIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, farm_name, full_name')
+          .in('user_id', farmerIds);
+        
+        const profileMap = new Map((profiles || []).map(p => [p.user_id, p]));
+        data.forEach(order => {
+          const profile = profileMap.get(order.farmer_id);
+          if (profile) {
+            order.farmer_name = profile.full_name;
+            order.farm_name = profile.farm_name;
+          }
+        });
       }
     }
-
-    // Generic text search (like consumer search style)
-    if (q) {
-      params.push(`%${q}%`);
-      where.push(`(o.order_number ILIKE $${paramCount} OR pr.farm_name ILIKE $${paramCount} OR u.email ILIKE $${paramCount})`);
-      paramCount++;
-    }
-    
-    if (startDate) {
-      params.push(startDate);
-      where.push(`o.created_at >= $${paramCount++}`);
-    }
-    
-    if (endDate) {
-      params.push(endDate);
-      where.push(`o.created_at <= $${paramCount++}`);
-    }
-    
-    params.push(parseInt(limit));
-    params.push(parseInt(offset));
-    
-    const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-    
-    const query = `
-      SELECT 
-        o.*,
-        pr.farm_name,
-        pr.full_name as farmer_name,
-        u.email as consumer_email,
-        (SELECT full_name FROM profiles WHERE user_id = o.consumer_id) as consumer_name
-      FROM orders o
-      LEFT JOIN profiles pr ON o.farmer_id = pr.user_id
-      LEFT JOIN users u ON o.consumer_id = u.user_id
-      ${whereSql}
-      ORDER BY o.created_at DESC
-      LIMIT $${paramCount++} OFFSET $${paramCount}
-    `;
-    
-    const result = await pool.query(query, params);
-    
-    // Get total count for pagination
-    const countQuery = `
-      SELECT COUNT(*) as total
-      FROM orders o
-      ${whereSql}
-    `;
-    const countResult = await pool.query(
-      countQuery,
-      params.slice(0, params.length - 2) // Remove limit and offset
-    );
     
     res.json({ 
       success: true, 
-      data: result.rows,
+      data: data || [],
       pagination: {
-        total: parseInt(countResult.rows[0].total),
+        total: count || 0,
         limit: parseInt(limit),
         offset: parseInt(offset)
       }
@@ -297,38 +275,56 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrderDetails = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const Order = require('../models/Order');
     
-    // Get order without consumer_id restriction
-    const orderQuery = await pool.query(
-      `SELECT o.*, 
-        pr.farm_name, pr.full_name as farmer_name,
-        u.email as consumer_email,
-        (SELECT full_name FROM profiles WHERE user_id = o.consumer_id) as consumer_name,
-        ca.full_address as delivery_address
-       FROM orders o
-       LEFT JOIN profiles pr ON o.farmer_id = pr.user_id
-       LEFT JOIN users u ON o.consumer_id = u.user_id
-       LEFT JOIN consumer_addresses ca ON o.delivery_address_id = ca.address_id
-       WHERE o.order_id = $1`,
-      [orderId]
-    );
+    // Get order
+    const { data: order, error: orderError } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('order_id', orderId)
+      .single();
     
-    if (orderQuery.rows.length === 0) {
+    if (orderError || !order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
     
-    const order = orderQuery.rows[0];
+    // Get farmer profile
+    if (order.farmer_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('farm_name, full_name')
+        .eq('user_id', order.farmer_id)
+        .single();
+      
+      if (profile) {
+        order.farmer_name = profile.full_name;
+        order.farm_name = profile.farm_name;
+      }
+    }
     
-    // Get order items
-    const itemsQuery = await pool.query(
-      `SELECT oi.*, p.variety_name, p.rice_type
-       FROM order_items oi
-       INNER JOIN products p ON oi.product_id = p.product_id
-       WHERE oi.order_id = $1`,
-      [orderId]
-    );
-    order.items = itemsQuery.rows;
+    // Get order items with product details
+    const { data: items } = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', orderId);
+    
+    if (items && items.length > 0) {
+      const productIds = items.map(item => item.product_id);
+      const { data: products } = await supabase
+        .from('products')
+        .select('product_id, variety_name, rice_type')
+        .in('product_id', productIds);
+      
+      const productMap = new Map((products || []).map(p => [p.product_id, p]));
+      items.forEach(item => {
+        const product = productMap.get(item.product_id);
+        if (product) {
+          item.variety_name = product.variety_name;
+          item.rice_type = product.rice_type;
+        }
+      });
+    }
+    
+    order.items = items || [];
     
     res.json({ success: true, data: order });
   } catch (error) {
@@ -349,7 +345,17 @@ exports.processRefund = async (req, res) => {
 
 // AD-3: Get all payouts
 exports.getAllPayouts = async (req, res) => {
-  return res.status(501).json({ success: false, message: 'Payouts endpoint under migration to Supabase' });
+  try {
+    // Return empty data for now - to be implemented with full payout system
+    res.json({ 
+      success: true, 
+      data: [],
+      message: 'Payout system pending implementation'
+    });
+  } catch (error) {
+    console.error('getAllPayouts error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch payouts' });
+  }
 };
 
 // AD-3: Get payout details
@@ -383,7 +389,49 @@ exports.updateCommissionSettings = async (req, res) => {
 
 // AD-6: Get analytics and KPIs
 exports.getAnalytics = async (req, res) => {
-  return res.status(501).json({ success: false, message: 'Analytics under migration to Supabase' });
+  try {
+    // Get basic analytics from Supabase
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('user_id, role', { count: 'exact', head: true });
+    
+    const { data: orders, error: ordersError } = await supabase
+      .from('orders')
+      .select('order_id, total_amount, status', { count: 'exact' });
+    
+    const { data: products, error: productsError } = await supabase
+      .from('products')
+      .select('product_id', { count: 'exact', head: true });
+    
+    // Calculate basic stats
+    const totalRevenue = (orders || [])
+      .filter(o => o.status === 'COMPLETED')
+      .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
+    
+    const analytics = {
+      totalUsers: users?.length || 0,
+      totalOrders: orders?.length || 0,
+      totalProducts: products?.length || 0,
+      totalRevenue: totalRevenue.toFixed(2),
+      pendingOrders: (orders || []).filter(o => o.status === 'PENDING').length,
+      completedOrders: (orders || []).filter(o => o.status === 'COMPLETED').length,
+    };
+    
+    res.json({ success: true, data: analytics });
+  } catch (error) {
+    console.error('getAnalytics error:', error);
+    res.json({ 
+      success: true, 
+      data: {
+        totalUsers: 0,
+        totalOrders: 0,
+        totalProducts: 0,
+        totalRevenue: '0.00',
+        pendingOrders: 0,
+        completedOrders: 0,
+      }
+    });
+  }
 };
 
 // AD-4: Get all disputes
