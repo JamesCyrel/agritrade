@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { Text, Image } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function FarmerLayout() {
@@ -25,42 +25,72 @@ export default function FarmerLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/home.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: "Orders",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📦</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/orders.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
           title: "Products",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🌾</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/products.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="archive"
         options={{
           title: "Archive",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🗄️</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/archive.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: "Earnings",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>💰</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/earnings.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="verification"
         options={{
           title: "Verification",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📝</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/verify.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -73,7 +103,12 @@ export default function FarmerLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color }) => (
+            <Image 
+              source={require('../../assets/icons/profile.png')} 
+              style={{ width: 24, height: 24, tintColor: color }}
+            />
+          ),
         }}
       />
       {/* Hide these screens from tab bar - they're not tabs but accessible via navigation */}

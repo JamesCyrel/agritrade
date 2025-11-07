@@ -244,31 +244,31 @@ export default function FarmerProfileScreen() {
           </View>
           <View style={styles.menuSection}>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/products')}>
-              <Text style={styles.menuIcon}>📦</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>My Products</Text>
               <Text style={styles.menuMeta}>{productCount}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/orders')}>
-              <Text style={styles.menuIcon}>📋</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>My Orders</Text>
               <Text style={styles.menuMeta}>{pendingOrders} pending</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/earnings')}>
-              <Text style={styles.menuIcon}>💰</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>Earnings</Text>
               <Text style={styles.menuMeta}>₱{currentBalance.toFixed(2)}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/reviews')}>
-              <Text style={styles.menuIcon}>⭐</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>Reviews</Text>
               <Text style={styles.menuMeta}>{reviewsCount}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => setShowProfileSetup(!showProfileSetup)}>
-              <Text style={styles.menuIcon}>⚙️</Text>
+              <Text style={styles.menuIcon}></Text>
               <Text style={styles.menuTitle}>Profile Setup</Text>
               <Text style={styles.menuMeta}>{showProfileSetup ? '▼' : '▶'}</Text>
             </TouchableOpacity>
@@ -300,7 +300,7 @@ export default function FarmerProfileScreen() {
               </View>
               
               <TouchableOpacity style={styles.captureButton} onPress={captureLocation} disabled={locLoading}>
-                {locLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.captureText}>📍 Capture GPS Location</Text>}
+                {locLoading ? <ActivityIndicator color="#fff" /> : <Text style={styles.captureText}>Capture GPS Location</Text>}
               </TouchableOpacity>
 
               <Text style={styles.sectionTitle}>Bank Details</Text>
@@ -315,7 +315,7 @@ export default function FarmerProfileScreen() {
               <TextInput style={styles.input} value={branchCode} onChangeText={setBranchCode} placeholder="Branch Code" />
               
               <TouchableOpacity style={styles.saveButton} onPress={saveProfile} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>💾 Save Profile</Text>}
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}> Save Profile</Text>}
               </TouchableOpacity>
             </View>
           )}

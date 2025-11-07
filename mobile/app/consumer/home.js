@@ -236,7 +236,10 @@ export default function ConsumerHomeScreen() {
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>AgriTrade</Text>
           <TouchableOpacity onPress={() => router.push("/consumer/profile")}>
-            <Text style={styles.headerIcon}>👤</Text>
+            <Image 
+              source={require('../../assets/icons/profile.png')} 
+              style={{ width: 24, height: 24, tintColor: '#fff' }}
+            />
           </TouchableOpacity>
         </View>
         <Text style={styles.headerSubtitle}>Fresh Rice, Direct from Farmers</Text>
@@ -257,7 +260,10 @@ export default function ConsumerHomeScreen() {
             returnKeyType="search"
           />
           <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Image 
+              source={require('../../assets/icons/search.png')} 
+              style={{ width: 24, height: 24, tintColor: '#fff' }}
+            />
           </TouchableOpacity>
         </View>
 
