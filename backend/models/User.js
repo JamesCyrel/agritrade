@@ -89,6 +89,60 @@ class User {
     }
   }
 
+  // Create user for OAuth (no password required)
+  static async createOAuthUser(userData) {
+    const { email, phone, role, full_name } = userData;
+    
+    // Generate a random password hash for OAuth users (they won't use it)
+    const saltRounds = 10;
+    const randomPassword = require('crypto').randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.hash(randomPassword, saltRounds);
+
+    try {
+      const { data: insertedUsers, error: insertError } = await supabase
+        .from('users')
+        .insert([{ email: email || null, phone: phone || null, password_hash: passwordHash, role }])
+        .select('user_id, email, phone, role, created_at')
+        .limit(1);
+
+      if (insertError) {
+        const msg = insertError?.message || '';
+        if (msg.includes('users_email_key') || msg.toLowerCase().includes('email') && msg.toLowerCase().includes('already')) {
+          throw new Error('Email already exists');
+        }
+        if (msg.includes('users_phone_key') || msg.toLowerCase().includes('phone') && msg.toLowerCase().includes('already')) {
+          throw new Error('Phone number already exists');
+        }
+        throw insertError;
+      }
+
+      const user = insertedUsers && insertedUsers[0];
+
+      // Create profile with full_name if provided
+      const profileData = { user_id: user.user_id };
+      if (full_name) {
+        profileData.full_name = full_name;
+      }
+
+      const { error: profileInsertError } = await supabase
+        .from('profiles')
+        .insert([profileData]);
+
+      if (profileInsertError) throw profileInsertError;
+
+      return {
+        user_id: user.user_id,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        created_at: user.created_at,
+      };
+    } catch (error) {
+      console.error('Error creating OAuth user:', error);
+      throw error;
+    }
+  }
+
   static async verifyPassword(password, passwordHash) {
     return await bcrypt.compare(password, passwordHash);
   }

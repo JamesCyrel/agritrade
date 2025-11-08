@@ -1,8 +1,8 @@
 // API Configuration
+// const API_BASE_URL = 'https://agritrade-backend.onrender.com/api'; // Temporarily hardcoded for testing
 const API_BASE_URL = __DEV__
-  ? 'http://10.251.254.47:8081/api' // For development - use your computer's IP and backend port
-  : 'https://agritrade-backend.onrender.com/api '; // Update for production
-
+  ? 'http://10.251.254.47:8081/api'
+  : 'https://agritrade-backend.onrender.com/api';
 // Helper function to make API calls
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {
   const url = `${API_BASE_URL}${endpoint}`;
@@ -60,6 +60,10 @@ export const authAPI = {
 
   verify: async (token) => {
     return await apiCall('/auth/verify', 'GET', null, token);
+  },
+
+  googleSignIn: async (supabaseData) => {
+    return await apiCall('/auth/google', 'POST', supabaseData);
   },
 };
 

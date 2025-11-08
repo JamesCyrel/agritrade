@@ -11,5 +11,8 @@ router.post('/login', authController.login);
 // GET /api/auth/verify
 router.get('/verify', authController.verifyToken);
 
+// POST /api/auth/google
+router.post('/google', authController.googleSignIn);
+
 module.exports = router;
 

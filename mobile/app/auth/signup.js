@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signInWithGoogleAlternative } from "../../services/googleAuth";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -21,6 +22,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("CONSUMER");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
@@ -78,6 +80,63 @@ export default function SignupScreen() {
 
   const navigateToLogin = () => {
     router.push("/auth/login");
+  };
+
+  const handleGoogleSignUp = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogleAlternative();
+      
+      if (result.success && result.session && result.user) {
+        // Send the Supabase session to the backend with the selected role
+        const backendResponse = await authAPI.googleSignIn({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            name: result.user.user_metadata?.full_name || result.user.user_metadata?.name || null,
+            avatar_url: result.user.user_metadata?.avatar_url || null,
+          },
+          role: selectedRole, // Include role for signup
+        });
+
+        if (backendResponse.success) {
+          // Store token
+          await AsyncStorage.setItem('authToken', backendResponse.data.token);
+          await AsyncStorage.setItem('userData', JSON.stringify(backendResponse.data.user));
+          await AsyncStorage.setItem('supabaseSession', JSON.stringify(result.session));
+
+          // Redirect based on role
+          if (backendResponse.data.user.role === 'FARMER') {
+            router.replace('/farmer/profile');
+            return;
+          }
+          router.replace(backendResponse.data.redirectPath);
+        } else {
+          Alert.alert(
+            "❌ Sign Up Failed",
+            backendResponse.message || "Unable to complete Google sign up. Please try again.",
+            [{ text: "OK", style: "default" }]
+          );
+        }
+      } else {
+        Alert.alert(
+          "❌ Sign Up Cancelled",
+          result.error || "Google sign up was cancelled or failed.",
+          [{ text: "OK", style: "default" }]
+        );
+      }
+    } catch (error) {
+      console.error("Google Sign-Up error:", error);
+      Alert.alert(
+        "❌ Sign Up Error",
+        error.message || "An error occurred during Google sign up. Please try again.",
+        [{ text: "OK", style: "default" }]
+      );
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -198,8 +257,16 @@ export default function SignupScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton}>
-          <Text style={styles.socialButtonText}>Sign up with Google</Text>
+        <TouchableOpacity
+          style={[styles.socialButton, googleLoading && styles.socialButtonDisabled]}
+          onPress={handleGoogleSignUp}
+          disabled={googleLoading || loading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#333" />
+          ) : (
+            <Text style={styles.socialButtonText}>Sign up with Google</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.loginContainer}>
@@ -342,6 +409,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
     marginBottom: 12,
+  },
+  socialButtonDisabled: {
+    opacity: 0.6,
   },
   socialButtonText: {
     color: "#333",

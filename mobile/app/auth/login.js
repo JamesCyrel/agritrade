@@ -11,12 +11,14 @@ import {
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { signInWithGoogleAlternative } from "../../services/googleAuth";
 
 export default function LoginScreen() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
@@ -143,6 +145,62 @@ export default function LoginScreen() {
     router.push("/auth/signup");
   };
 
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogleAlternative();
+      
+      if (result.success && result.session && result.user) {
+        // Send the Supabase session to the backend
+        const backendResponse = await authAPI.googleSignIn({
+          access_token: result.session.access_token,
+          refresh_token: result.session.refresh_token,
+          user: {
+            id: result.user.id,
+            email: result.user.email,
+            name: result.user.user_metadata?.full_name || result.user.user_metadata?.name || null,
+            avatar_url: result.user.user_metadata?.avatar_url || null,
+          },
+        });
+
+        if (backendResponse.success) {
+          // Store token
+          await AsyncStorage.setItem('authToken', backendResponse.data.token);
+          await AsyncStorage.setItem('userData', JSON.stringify(backendResponse.data.user));
+          await AsyncStorage.setItem('supabaseSession', JSON.stringify(result.session));
+
+          // Redirect based on role
+          if (backendResponse.data.user.role === 'FARMER') {
+            router.replace('/farmer/profile');
+            return;
+          }
+          router.replace(backendResponse.data.redirectPath);
+        } else {
+          Alert.alert(
+            "❌ Sign In Failed",
+            backendResponse.message || "Unable to complete Google sign in. Please try again.",
+            [{ text: "OK", style: "default" }]
+          );
+        }
+      } else {
+        Alert.alert(
+          "❌ Sign In Cancelled",
+          result.error || "Google sign in was cancelled or failed.",
+          [{ text: "OK", style: "default" }]
+        );
+      }
+    } catch (error) {
+      console.error("Google Sign-In error:", error);
+      Alert.alert(
+        "❌ Sign In Error",
+        error.message || "An error occurred during Google sign in. Please try again.",
+        [{ text: "OK", style: "default" }]
+      );
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -200,8 +258,16 @@ export default function LoginScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.socialButton}>
-          <Text style={styles.socialButtonText}>Continue with Google</Text>
+        <TouchableOpacity
+          style={[styles.socialButton, googleLoading && styles.socialButtonDisabled]}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading || loading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#333" />
+          ) : (
+            <Text style={styles.socialButtonText}>Continue with Google</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
@@ -323,6 +389,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#ddd",
     marginBottom: 12,
+  },
+  socialButtonDisabled: {
+    opacity: 0.6,
   },
   socialButtonText: {
     color: "#333",
