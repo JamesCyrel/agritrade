@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Home, Package, Wheat, Archive, DollarSign, FileText, User } from "lucide-react-native";
 
 export default function FarmerLayout() {
   const insets = useSafeAreaInsets();
@@ -25,42 +26,42 @@ export default function FarmerLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <Home size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: "Orders",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📦</Text>,
+          tabBarIcon: ({ color }) => <Package size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="products"
         options={{
           title: "Products",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🌾</Text>,
+          tabBarIcon: ({ color }) => <Wheat size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="archive"
         options={{
           title: "Archive",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🗄️</Text>,
+          tabBarIcon: ({ color }) => <Archive size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="earnings"
         options={{
           title: "Earnings",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>💰</Text>,
+          tabBarIcon: ({ color }) => <DollarSign size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="verification"
         options={{
           title: "Verification",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📝</Text>,
+          tabBarIcon: ({ color }) => <FileText size={24} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -73,7 +74,7 @@ export default function FarmerLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
       {/* Hide these screens from tab bar - they're not tabs but accessible via navigation */}

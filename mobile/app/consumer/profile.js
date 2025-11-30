@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
+import { User, MapPin, CreditCard } from "lucide-react-native";
 
 export default function ConsumerProfileScreen() {
   const router = useRouter();
@@ -302,7 +303,7 @@ export default function ConsumerProfileScreen() {
       {/* Profile Card */}
       <View style={styles.profileCard}>
         <View style={styles.avatarContainer}>
-          <Text style={styles.avatar}>👤</Text>
+          <User size={40} color="#666" />
         </View>
         {editingName ? (
           <View style={styles.nameEditContainer}>
@@ -337,7 +338,10 @@ export default function ConsumerProfileScreen() {
       {/* Addresses Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>📍 Delivery Addresses</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MapPin size={20} color="#333" style={{ marginRight: 8 }} />
+            <Text style={styles.sectionTitle}>Delivery Addresses</Text>
+          </View>
           <TouchableOpacity onPress={() => openAddressModal()} style={styles.addButton}>
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>
@@ -373,7 +377,10 @@ export default function ConsumerProfileScreen() {
       {/* Payment Methods Section */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>💳 Payment Methods</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <CreditCard size={20} color="#333" style={{ marginRight: 8 }} />
+            <Text style={styles.sectionTitle}>Payment Methods</Text>
+          </View>
           <TouchableOpacity onPress={() => openPaymentModal()} style={styles.addButton}>
             <Text style={styles.addButtonText}>+ Add</Text>
           </TouchableOpacity>

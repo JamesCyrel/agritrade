@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CheckCircle, ArrowLeft, Banknote, CreditCard, Smartphone, Link } from "lucide-react-native";
 import { consumerAPI } from "../../services/api";
 
 const CHECKOUT_STEPS = {
@@ -241,7 +242,7 @@ export default function CheckoutScreen() {
   if (currentStep === CHECKOUT_STEPS.CONFIRMATION && orderJustPlaced) {
     return (
       <View style={[styles.container, styles.confirmationContainer]}>
-        <Text style={styles.confirmationIcon}>✅</Text>
+        <CheckCircle size={80} color="#2d5016" style={{ marginBottom: 20 }} />
         <Text style={styles.confirmationTitle}>Order Placed Successfully!</Text>
         <Text style={styles.confirmationText}>Your order has been confirmed</Text>
         <Text style={styles.confirmationSubtext}>Redirecting to orders...</Text>
@@ -253,7 +254,7 @@ export default function CheckoutScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
+          <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Checkout</Text>
         <View style={styles.stepIndicator}>
@@ -433,7 +434,10 @@ export default function CheckoutScreen() {
               }}
               disabled={!codEligible && !checkingCodEligibility}
             >
-              <Text style={styles.paymentType}>💰 Cash on Delivery (COD)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Banknote size={20} color="#333" style={{ marginRight: 8 }} />
+                <Text style={[styles.paymentType, { marginBottom: 0 }]}>Cash on Delivery (COD)</Text>
+              </View>
               <Text style={styles.paymentDetails}>
                 {checkingCodEligibility ? "Checking availability..." : (codEligible ? "Pay when your order is delivered" : "Not available for this order")}
               </Text>
@@ -467,12 +471,12 @@ export default function CheckoutScreen() {
                   ]}
                   onPress={() => setSelectedPaymentId(method.payment_id)}
                 >
-                  <Text style={styles.paymentType}>
-                    {method.payment_type === "CARD" && "💳"}
-                    {method.payment_type === "WALLET" && "📱"}
-                    {method.payment_type === "UPI" && "🔗"}
-                    {` ${method.payment_type}`}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    {method.payment_type === "CARD" && <CreditCard size={20} color="#333" style={{ marginRight: 8 }} />}
+                    {method.payment_type === "WALLET" && <Smartphone size={20} color="#333" style={{ marginRight: 8 }} />}
+                    {method.payment_type === "UPI" && <Link size={20} color="#333" style={{ marginRight: 8 }} />}
+                    <Text style={[styles.paymentType, { marginBottom: 0 }]}>{method.payment_type}</Text>
+                  </View>
                   {method.payment_type === "CARD" && method.card_number_last4 && (
                     <Text style={styles.paymentDetails}>
                       **** **** **** {method.card_number_last4}

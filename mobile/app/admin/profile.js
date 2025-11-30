@@ -11,6 +11,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../../services/api";
+import { User } from "lucide-react-native";
 
 export default function AdminProfileScreen() {
   const router = useRouter();
@@ -38,7 +39,7 @@ export default function AdminProfileScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      "🚪 Logout",
+      "Logout",
       "Are you sure you want to logout?",
       [
         {
@@ -80,7 +81,7 @@ export default function AdminProfileScreen() {
       <ScrollView style={styles.content}>
         <View style={styles.profileCard}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatar}>👨‍💼</Text>
+            <User size={40} color="#666" />
           </View>
           <Text style={styles.name}>
             {user?.full_name || user?.email || "Administrator"}

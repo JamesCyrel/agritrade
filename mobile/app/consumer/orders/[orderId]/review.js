@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ArrowLeft, Star } from "lucide-react-native";
 import { consumerAPI } from "../../../../services/api";
 
 export default function ReviewScreen() {
@@ -110,7 +111,7 @@ export default function ReviewScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
+          <ArrowLeft size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
           {existingReview ? "Edit Review" : "Leave a Review"}
@@ -139,9 +140,11 @@ export default function ReviewScreen() {
                 onPress={() => setRating(star)}
                 activeOpacity={0.7}
               >
-                <Text style={[styles.star, rating >= star && styles.starFilled]}>
-                  {rating >= star ? "⭐" : "☆"}
-                </Text>
+                <Star 
+                  size={40} 
+                  color={rating >= star ? "#FFD700" : "#ccc"} 
+                  fill={rating >= star ? "#FFD700" : "transparent"} 
+                />
               </TouchableOpacity>
             ))}
           </View>

@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { productAPI } from "../../services/api";
+import { Wheat, Edit, Archive, Power, Package } from "lucide-react-native";
 
 export default function ProductsScreen() {
   const router = useRouter();
@@ -145,12 +146,16 @@ export default function ProductsScreen() {
               </View>
             </View>
 
-            {product.images && product.images.length > 0 && (
+            {product.images && product.images.length > 0 ? (
               <Image
                 source={{ uri: product.images[0] }}
                 style={styles.productImage}
                 defaultSource={require('../../assets/images/icon.png')}
               />
+            ) : (
+              <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f0f0' }]}>
+                <Wheat size={40} color="#ccc" />
+              </View>
             )}
 
             <View style={styles.productDetails}>
@@ -170,12 +175,14 @@ export default function ProductsScreen() {
                 style={styles.actionButton}
                 onPress={() => router.push(`/farmer/products/create?id=${product.product_id}`)}
               >
+                <Edit size={16} color="#2d5016" style={{ marginRight: 4 }} />
                 <Text style={styles.actionButtonText}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.actionButton, styles.inventoryButton]}
                 onPress={() => router.push(`/farmer/products/inventory?id=${product.product_id}`)}
               >
+                <Package size={16} color="#2d5016" style={{ marginRight: 4 }} />
                 <Text style={styles.actionButtonText}>Stock</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -183,6 +190,7 @@ export default function ProductsScreen() {
                 onPress={() => handleToggleStatus(product)}
                 disabled={product.status === 'ARCHIVED'}
               >
+                <Power size={16} color="#2d5016" style={{ marginRight: 4 }} />
                 <Text style={styles.actionButtonText}>
                   {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                 </Text>
@@ -192,6 +200,7 @@ export default function ProductsScreen() {
                 onPress={() => handleArchive(product)}
                 disabled={product.status === 'ARCHIVED'}
               >
+                <Archive size={16} color="#d32f2f" style={{ marginRight: 4 }} />
                 <Text style={[styles.actionButtonText, styles.archiveButtonText]}>Archive</Text>
               </TouchableOpacity>
             </View>

@@ -11,6 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerOrderAPI } from "../../services/api";
+import { ClipboardList, Clock, CheckCircle, Truck, PartyPopper, XCircle } from "lucide-react-native";
 
 const ORDER_STATUSES = {
   PENDING: "PENDING",
@@ -22,12 +23,12 @@ const ORDER_STATUSES = {
 };
 
 const STATUS_TABS = [
-  { key: null, label: "All", status: null, icon: "📋" },
-  { key: ORDER_STATUSES.PENDING, label: "Pending", status: ORDER_STATUSES.PENDING, icon: "⏳" },
-  { key: ORDER_STATUSES.CONFIRMED, label: "Confirmed", status: ORDER_STATUSES.CONFIRMED, icon: "✅" },
-  { key: ORDER_STATUSES.OUT_FOR_DELIVERY, label: "Out for Delivery", status: ORDER_STATUSES.OUT_FOR_DELIVERY, icon: "🚚" },
-  { key: ORDER_STATUSES.DELIVERED, label: "Completed", status: ORDER_STATUSES.DELIVERED, icon: "🎉" },
-  { key: ORDER_STATUSES.CANCELLED, label: "Canceled", status: ORDER_STATUSES.CANCELLED, icon: "❌" },
+  { key: null, label: "All", status: null, Icon: ClipboardList },
+  { key: ORDER_STATUSES.PENDING, label: "Pending", status: ORDER_STATUSES.PENDING, Icon: Clock },
+  { key: ORDER_STATUSES.CONFIRMED, label: "Confirmed", status: ORDER_STATUSES.CONFIRMED, Icon: CheckCircle },
+  { key: ORDER_STATUSES.OUT_FOR_DELIVERY, label: "Out for Delivery", status: ORDER_STATUSES.OUT_FOR_DELIVERY, Icon: Truck },
+  { key: ORDER_STATUSES.DELIVERED, label: "Completed", status: ORDER_STATUSES.DELIVERED, Icon: PartyPopper },
+  { key: ORDER_STATUSES.CANCELLED, label: "Canceled", status: ORDER_STATUSES.CANCELLED, Icon: XCircle },
 ];
 
 const getStatusColor = (status) => {
@@ -160,7 +161,7 @@ export default function FarmerOrdersScreen() {
               ]}
               onPress={() => handleTabPress(tab)}
             >
-              <Text style={styles.tabIcon}>{tab.icon}</Text>
+              <tab.Icon size={20} color={selectedTab === tab.status ? "#fff" : "#666"} style={{ marginBottom: 4 }} />
               <Text
                 style={[
                   styles.tabText,
@@ -184,7 +185,7 @@ export default function FarmerOrdersScreen() {
       >
         {orders.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>📦</Text>
+            <ClipboardList size={60} color="#ccc" style={{ marginBottom: 16 }} />
             <Text style={styles.emptyStateText}>No orders found</Text>
             <Text style={styles.emptyStateSubtext}>
               {selectedTab ? `No ${getStatusLabelForHeader(selectedTab).toLowerCase()} orders yet` : "You don't have any orders yet"}

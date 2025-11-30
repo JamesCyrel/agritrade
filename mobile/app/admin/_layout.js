@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Home, Package, CheckCircle, Users, DollarSign, User } from "lucide-react-native";
 
 export default function AdminLayout() {
   const insets = useSafeAreaInsets();
@@ -25,42 +26,42 @@ export default function AdminLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>🏠</Text>,
+          tabBarIcon: ({ color }) => <Home size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="orders"
         options={{
           title: "Orders",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>📦</Text>,
+          tabBarIcon: ({ color }) => <Package size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="verifications"
         options={{
           title: "Verify",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>✅</Text>,
+          tabBarIcon: ({ color }) => <CheckCircle size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="users"
         options={{
           title: "Users",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👥</Text>,
+          tabBarIcon: ({ color }) => <Users size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="payouts"
         options={{
           title: "Payouts",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>💰</Text>,
+          tabBarIcon: ({ color }) => <DollarSign size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 20 }}>👤</Text>,
+          tabBarIcon: ({ color }) => <User size={24} color={color} />,
         }}
       />
       <Tabs.Screen

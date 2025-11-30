@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Activi
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
+import { Wheat, Package, ClipboardList, DollarSign, Star } from "lucide-react-native";
 
 export default function FarmerProfileScreen() {
   const router = useRouter();
@@ -215,32 +216,32 @@ export default function FarmerProfileScreen() {
       {status === 'APPROVED' && (
         <View>
           <View style={styles.profileCard}>
-            <View style={styles.avatarContainer}><Text style={styles.avatar}>🌾</Text></View>
+            <View style={styles.avatarContainer}><Wheat size={40} color="#2d5016" /></View>
             <Text style={styles.name}>{profile.farm_name || 'Farm Name'}</Text>
             <Text style={styles.email}>{profile.full_name || ''}</Text>
             <Text style={styles.role}>Farmer</Text>
           </View>
           <View style={styles.menuSection}>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/products')}>
-              <Text style={styles.menuIcon}>📦</Text>
+              <Package size={24} color="#333" style={{ marginRight: 16 }} />
               <Text style={styles.menuTitle}>My Products</Text>
               <Text style={styles.menuMeta}>{productCount}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/orders')}>
-              <Text style={styles.menuIcon}>📋</Text>
+              <ClipboardList size={24} color="#333" style={{ marginRight: 16 }} />
               <Text style={styles.menuTitle}>My Orders</Text>
               <Text style={styles.menuMeta}>{pendingOrders} pending</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/earnings')}>
-              <Text style={styles.menuIcon}>💰</Text>
+              <DollarSign size={24} color="#333" style={{ marginRight: 16 }} />
               <Text style={styles.menuTitle}>Earnings</Text>
               <Text style={styles.menuMeta}>₱{currentBalance.toFixed(2)}</Text>
               <Text style={styles.menuArrow}>›</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/reviews')}>
-              <Text style={styles.menuIcon}>⭐</Text>
+              <Star size={24} color="#333" style={{ marginRight: 16 }} />
               <Text style={styles.menuTitle}>Reviews</Text>
               <Text style={styles.menuMeta}>{reviewsCount}</Text>
               <Text style={styles.menuArrow}>›</Text>

@@ -9,6 +9,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerOrderAPI, productAPI, farmerAPI, farmerReviewAPI } from "../../services/api";
+import { AlertTriangle, Star } from "lucide-react-native";
 
 export default function FarmerHomeScreen() {
   const router = useRouter();
@@ -65,9 +66,12 @@ export default function FarmerHomeScreen() {
       <ScrollView style={styles.content}>
         {pendingCount > 0 && (
           <View style={styles.alertBanner}>
-            <Text style={styles.alertText}>
-              ⚠️ You have {pendingCount} new order{pendingCount>1?'s':''} waiting for confirmation
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <AlertTriangle size={20} color="#856404" style={{ marginRight: 8 }} />
+              <Text style={styles.alertText}>
+                You have {pendingCount} new order{pendingCount>1?'s':''} waiting for confirmation
+              </Text>
+            </View>
           </View>
         )}
 
@@ -85,7 +89,10 @@ export default function FarmerHomeScreen() {
             <Text style={styles.statLabel}>Active Products</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: '#ffc107' }]}>{avgRating ? `${avgRating} ⭐` : 'N/A'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={[styles.statValue, { color: '#ffc107' }]}>{avgRating ? `${avgRating}` : 'N/A'}</Text>
+              {avgRating && <Star size={16} color="#ffc107" fill="#ffc107" style={{ marginLeft: 4 }} />}
+            </View>
             <Text style={styles.statLabel}>Rating</Text>
           </View>
         </View>

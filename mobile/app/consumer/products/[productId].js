@@ -15,6 +15,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../../services/api";
+import { Heart, Wheat, Star, MapPin, X } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
 
@@ -170,18 +171,26 @@ export default function ProductDetailScreen() {
             onPress={handleToggleFavorite}
             disabled={togglingFavorite}
           >
-            <Text style={styles.favoriteIcon}>{isFavorite ? "❤️" : "🤍"}</Text>
+            <Heart 
+              size={24} 
+              color={isFavorite ? "#e74c3c" : "#666"} 
+              fill={isFavorite ? "#e74c3c" : "transparent"}
+            />
           </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.productImage}>
-          <Text style={styles.productImagePlaceholder}>🌾</Text>
+          <Wheat size={60} color="#ccc" />
           <TouchableOpacity
             style={styles.favoriteButton}
             onPress={handleToggleFavorite}
             disabled={togglingFavorite}
           >
-            <Text style={styles.favoriteIcon}>{isFavorite ? "❤️" : "🤍"}</Text>
+            <Heart 
+              size={24} 
+              color={isFavorite ? "#e74c3c" : "#666"} 
+              fill={isFavorite ? "#e74c3c" : "transparent"}
+            />
           </TouchableOpacity>
         </View>
       )}
@@ -240,11 +249,16 @@ export default function ProductDetailScreen() {
               <Text style={styles.farmerName}>{product.farm_name || product.farmer_name}</Text>
               {product.average_rating > 0 && (
                 <View style={styles.ratingContainer}>
-                  <Text style={styles.ratingStars}>
-                    {Array.from({ length: 5 }, (_, i) => 
-                      i < Math.round(product.average_rating) ? "⭐" : "☆"
-                    ).join("")}
-                  </Text>
+                  <View style={{ flexDirection: 'row' }}>
+                    {Array.from({ length: 5 }, (_, i) => (
+                      <Star 
+                        key={i}
+                        size={16} 
+                        color={i < Math.round(product.average_rating) ? "#f1c40f" : "#ccc"} 
+                        fill={i < Math.round(product.average_rating) ? "#f1c40f" : "transparent"}
+                      />
+                    ))}
+                  </View>
                   <Text style={styles.ratingText}>
                     {parseFloat(product.average_rating).toFixed(1)} ({product.total_reviews || 0} reviews)
                   </Text>
@@ -252,7 +266,10 @@ export default function ProductDetailScreen() {
               )}
             </View>
             {product.farmer_address && (
-              <Text style={styles.farmerAddress}>📍 {product.farmer_address}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                <MapPin size={14} color="#666" style={{ marginRight: 4 }} />
+                <Text style={styles.farmerAddress}>{product.farmer_address}</Text>
+              </View>
             )}
             <Text style={styles.viewStorefront}>View Storefront →</Text>
           </TouchableOpacity>
@@ -282,7 +299,7 @@ export default function ProductDetailScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Add to Cart</Text>
               <TouchableOpacity onPress={() => setShowAddToCart(false)}>
-                <Text style={styles.modalClose}>✕</Text>
+                <X size={24} color="#333" />
               </TouchableOpacity>
             </View>
 

@@ -14,6 +14,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
+import { Wheat, X } from "lucide-react-native";
 
 export default function ConsumerCartScreen() {
   const router = useRouter();
@@ -137,7 +138,7 @@ export default function ConsumerCartScreen() {
                   <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
                 ) : (
                   <View style={styles.itemImage}>
-                    <Text style={styles.itemImagePlaceholder}>🌾</Text>
+                    <Wheat size={40} color="#ccc" />
                   </View>
                 )}
                 <View style={styles.itemDetails}>
@@ -170,7 +171,7 @@ export default function ConsumerCartScreen() {
                   style={styles.removeButton}
                   onPress={() => handleRemoveItem(item.cart_item_id)}
                 >
-                  <Text style={styles.removeButtonText}>✕</Text>
+                  <X size={18} color="#d32f2f" />
                 </TouchableOpacity>
               </View>
             ))}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ChevronRight } from "lucide-react-native";
 import { adminAPI } from "../../services/api";
 
 export default function AdminVerificationsScreen() {
@@ -97,7 +98,7 @@ export default function AdminVerificationsScreen() {
                   <Text style={styles.itemSub}>{it.email || it.phone}</Text>
                   <Text style={styles.badge}>{it.verification_status}</Text>
                 </View>
-                <Text style={styles.arrow}>›</Text>
+                <ChevronRight size={24} color="#999" />
               </TouchableOpacity>
             ))
           )}

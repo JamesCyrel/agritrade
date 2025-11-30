@@ -13,6 +13,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
+import { HeartCrack, Wheat, Star, Heart } from "lucide-react-native";
 
 export default function ConsumerFavoritesScreen() {
   const router = useRouter();
@@ -86,7 +87,7 @@ export default function ConsumerFavoritesScreen() {
       >
         {favorites.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>💔</Text>
+            <HeartCrack size={60} color="#ccc" style={{ marginBottom: 16 }} />
             <Text style={styles.emptyStateText}>No favorites yet</Text>
             <Text style={styles.emptyStateSubtext}>Start adding products to your favorites!</Text>
           </View>
@@ -101,16 +102,19 @@ export default function ConsumerFavoritesScreen() {
                 <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
               ) : (
                 <View style={styles.itemImage}>
-                  <Text style={styles.itemImagePlaceholder}>🌾</Text>
+                  <Wheat size={32} color="#ccc" />
                 </View>
               )}
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.variety_name}</Text>
                 <Text style={styles.itemFarmer}>{item.farm_name || item.farmer_name}</Text>
                 {item.average_rating > 0 && (
-                  <Text style={styles.itemRating}>
-                    ⭐ {parseFloat(item.average_rating).toFixed(1)} ({item.total_reviews || 0})
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Star size={12} color="#f1c40f" fill="#f1c40f" style={{ marginRight: 4 }} />
+                    <Text style={styles.itemRating}>
+                      {parseFloat(item.average_rating).toFixed(1)} ({item.total_reviews || 0})
+                    </Text>
+                  </View>
                 )}
                 <Text style={styles.itemPrice}>₱{item.price_per_kg}/kg</Text>
               </View>
@@ -121,7 +125,7 @@ export default function ConsumerFavoritesScreen() {
                   handleRemoveFavorite(item.product_id);
                 }}
               >
-                <Text style={styles.heartIcon}>❤️</Text>
+                <Heart size={20} color="#e74c3c" fill="#e74c3c" />
               </TouchableOpacity>
             </TouchableOpacity>
           ))

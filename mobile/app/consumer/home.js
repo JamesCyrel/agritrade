@@ -13,6 +13,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
+import { Wheat, Heart, Star } from "lucide-react-native";
 
 export default function ConsumerHomeScreen() {
   const router = useRouter();
@@ -161,16 +162,18 @@ export default function ConsumerHomeScreen() {
             <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
           ) : (
             <View style={styles.cardImage}>
-              <Text style={styles.cardImagePlaceholder}>🌾</Text>
+              <Wheat size={40} color="#ccc" />
             </View>
           )}
           <TouchableOpacity
             style={styles.favoriteButton}
             onPress={(e) => handleToggleFavorite(product.product_id, e)}
           >
-            <Text style={styles.favoriteIcon}>
-              {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
-            </Text>
+            <Heart 
+              size={20} 
+              color={favoriteStatus[product.product_id] ? "#e74c3c" : "#666"} 
+              fill={favoriteStatus[product.product_id] ? "#e74c3c" : "transparent"}
+            />
           </TouchableOpacity>
         </View>
         <Text style={styles.cardTitle} numberOfLines={1}>
@@ -181,9 +184,12 @@ export default function ConsumerHomeScreen() {
         </Text>
         <Text style={styles.cardPrice}>₱{price}/kg</Text>
         {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (
-          <Text style={styles.cardRating}>
-            ⭐ {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <Star size={14} color="#f1c40f" fill="#f1c40f" />
+            <Text style={styles.cardRating}>
+               {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
+            </Text>
+          </View>
         )}
       </TouchableOpacity>
     );

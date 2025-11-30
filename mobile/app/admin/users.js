@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Wheat, User } from "lucide-react-native";
 import { adminAPI } from "../../services/api";
 
 export default function AdminUsersScreen() {
@@ -59,7 +60,7 @@ export default function AdminUsersScreen() {
                 >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
-                      <Text style={styles.avatar}>🌾</Text>
+                      <Wheat size={24} color="#2d5016" />
                     </View>
                     <View style={styles.userInfo}>
                       <Text style={styles.userName}>{user.farm_name || user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
@@ -113,7 +114,7 @@ export default function AdminUsersScreen() {
                 >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
-                      <Text style={styles.avatar}>👤</Text>
+                      <User size={24} color="#666" />
                     </View>
                     <View style={styles.userInfo}>
                       <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
@@ -138,7 +139,7 @@ export default function AdminUsersScreen() {
                 >
                   <View style={styles.userHeader}>
                     <View style={styles.avatarContainer}>
-                      <Text style={styles.avatar}>👤</Text>
+                      <User size={24} color="#666" />
                     </View>
                     <View style={styles.userInfo}>
                       <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
