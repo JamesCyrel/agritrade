@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { consumerAPI } from "../../services/api";
+import { consumerAPI, getImageUrl } from "../../services/api";
 import { Wheat, Heart, Star } from "lucide-react-native";
 
 export default function ConsumerHomeScreen() {
@@ -159,7 +159,7 @@ export default function ConsumerHomeScreen() {
       >
         <View style={styles.cardImageContainer}>
           {product.images && Array.isArray(product.images) && product.images.length > 0 ? (
-            <Image source={{ uri: product.images[0] }} style={styles.cardImage} />
+            <Image source={{ uri: getImageUrl(product.images[0]) }} style={styles.cardImage} />
           ) : (
             <View style={styles.cardImage}>
               <Wheat size={40} color="#ccc" />

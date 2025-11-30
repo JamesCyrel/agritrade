@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { consumerAPI } from "../../../services/api";
+import { consumerAPI, getImageUrl } from "../../../services/api";
 import { Heart, Wheat, Star, MapPin, X } from "lucide-react-native";
 
 const { width } = Dimensions.get("window");
@@ -163,7 +163,7 @@ export default function ProductDetailScreen() {
         <View>
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {product.images.map((image, index) => (
-              <Image key={index} source={{ uri: image }} style={styles.productImage} />
+              <Image key={index} source={{ uri: getImageUrl(image) }} style={styles.productImage} />
             ))}
           </ScrollView>
           <TouchableOpacity

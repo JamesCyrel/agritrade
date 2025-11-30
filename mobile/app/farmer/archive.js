@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { productAPI } from "../../services/api";
+import { productAPI, getImageUrl } from "../../services/api";
 
 export default function ArchiveScreen() {
   const router = useRouter();
@@ -116,7 +116,7 @@ export default function ArchiveScreen() {
 
             {product.images && product.images.length > 0 && (
               <Image
-                source={{ uri: product.images[0] }}
+                source={{ uri: getImageUrl(product.images[0]) }}
                 style={styles.productImage}
                 defaultSource={require('../../assets/images/icon.png')}
               />

@@ -10,6 +10,9 @@ const configuredRoot =
 
 const defaultRoot = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
+// Server base URL (without /api)
+const SERVER_BASE_URL = (configuredRoot || defaultRoot).replace(/\/$/, '');
+
 const normalizeBase = (root) => {
   if (!root) return 'http://localhost:3000/api';
   const trimmed = root.replace(/\/$/, '');
@@ -23,6 +26,18 @@ if (__DEV__) {
   // eslint-disable-next-line no-console
   console.log('[API] Base URL ->', API_BASE_URL);
 }
+
+// Helper function to get full image URL
+// Handles both relative paths (like /assets/rice/rice1.jpg) and full URLs
+export const getImageUrl = (imagePath) => {
+  if (!imagePath) return null;
+  // If it's already a full URL, return as is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // Otherwise, prepend the server URL
+  return `${SERVER_BASE_URL}${imagePath.startsWith('/') ? '' : '/'}${imagePath}`;
+};
 
 // Helper function to make API calls
 export const apiCall = async (endpoint, method = 'GET', body = null, token = null) => {

@@ -191,6 +191,22 @@ const CONSUMERS = [
 ];
 
 // Rice Products (will be assigned to farmers)
+// Using web-based placeholder images for rice
+const RICE_IMAGES = {
+  milled: [
+    'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1536304993881-ff6e9eefa2a6?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1594671017690-e1c6d5a3f2db?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1516684732162-798a0062be99?w=400&h=400&fit=crop',
+  ],
+  unmilled: [
+    'https://images.unsplash.com/photo-1604977042946-1eecc30f269e?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1599420186946-7b6fb4e297f0?w=400&h=400&fit=crop',
+    'https://images.unsplash.com/photo-1574323347407-f5e1c0c8de8a?w=400&h=400&fit=crop',
+  ]
+};
+
 const PRODUCTS = [
   // Farmer 1 - Magat Valley Rice Farm (Isabela)
   {
@@ -200,7 +216,7 @@ const PRODUCTS = [
     description: 'Our finest Sinandomeng rice, grown in the fertile Magat Valley. Long grain, aromatic, and perfect for everyday meals. Harvested fresh from our farm.',
     price_per_kg: 52,
     available_quantity: 500,
-    images: ['rice1.jpg', 'rice2.jpg'],
+    images: [RICE_IMAGES.milled[0], RICE_IMAGES.milled[1]],
     sack_sizes: [
       { size_kg: 5, price: 260 },
       { size_kg: 10, price: 510 },
@@ -215,7 +231,7 @@ const PRODUCTS = [
     description: 'Premium Dinorado rice known for its soft, fluffy texture when cooked. Locally grown with traditional farming methods.',
     price_per_kg: 65,
     available_quantity: 300,
-    images: ['rice3.jpg', 'rice4.jpg'],
+    images: [RICE_IMAGES.milled[2], RICE_IMAGES.milled[3]],
     sack_sizes: [
       { size_kg: 5, price: 325 },
       { size_kg: 10, price: 640 },
@@ -229,7 +245,7 @@ const PRODUCTS = [
     description: 'Fresh paddy rice for those who prefer to mill their own. High quality unmilled rice from Isabela province.',
     price_per_kg: 28,
     available_quantity: 1000,
-    images: ['unmilledrice1.jpg', 'unmilledrice2.jpg'],
+    images: [RICE_IMAGES.unmilled[0], RICE_IMAGES.unmilled[1]],
     sack_sizes: [
       { size_kg: 25, price: 700 },
       { size_kg: 50, price: 1350 }
@@ -243,7 +259,7 @@ const PRODUCTS = [
     description: 'Affordable, high-quality rice perfect for families. Grown in the rice granary of the Philippines.',
     price_per_kg: 45,
     available_quantity: 800,
-    images: ['rice2.jpg', 'rice1.jpg'],
+    images: [RICE_IMAGES.milled[1], RICE_IMAGES.milled[0]],
     sack_sizes: [
       { size_kg: 5, price: 225 },
       { size_kg: 10, price: 440 },
@@ -258,7 +274,7 @@ const PRODUCTS = [
     description: 'Fragrant jasmine rice with a naturally sweet aroma. Perfect for special occasions and Asian cuisine.',
     price_per_kg: 72,
     available_quantity: 250,
-    images: ['rice4.jpg', 'rice5.webp'],
+    images: [RICE_IMAGES.milled[3], RICE_IMAGES.milled[4]],
     sack_sizes: [
       { size_kg: 5, price: 360 },
       { size_kg: 10, price: 700 },
@@ -272,7 +288,7 @@ const PRODUCTS = [
     description: 'Nutritious brown rice for health-conscious consumers. Rich in fiber and natural nutrients.',
     price_per_kg: 68,
     available_quantity: 200,
-    images: ['rice3.jpg'],
+    images: [RICE_IMAGES.milled[2]],
     sack_sizes: [
       { size_kg: 5, price: 340 },
       { size_kg: 10, price: 660 }
@@ -286,7 +302,7 @@ const PRODUCTS = [
     description: 'Premium long grain rice from the coastal province of Pangasinan. Non-sticky and fluffy when cooked.',
     price_per_kg: 55,
     available_quantity: 600,
-    images: ['rice1.jpg', 'rice3.jpg'],
+    images: [RICE_IMAGES.milled[0], RICE_IMAGES.milled[2]],
     sack_sizes: [
       { size_kg: 5, price: 275 },
       { size_kg: 10, price: 540 },
@@ -301,7 +317,7 @@ const PRODUCTS = [
     description: 'Just harvested paddy rice. Mill it yourself for the freshest rice experience.',
     price_per_kg: 25,
     available_quantity: 1500,
-    images: ['unmilledrice3.webp', 'unmilledrice4.webp'],
+    images: [RICE_IMAGES.unmilled[2], RICE_IMAGES.unmilled[0]],
     sack_sizes: [
       { size_kg: 25, price: 625 },
       { size_kg: 50, price: 1200 }
@@ -315,7 +331,7 @@ const PRODUCTS = [
     description: 'Sticky rice (malagkit) perfect for traditional Filipino desserts like suman and biko.',
     price_per_kg: 58,
     available_quantity: 350,
-    images: ['rice5.webp', 'rice2.jpg'],
+    images: [RICE_IMAGES.milled[4], RICE_IMAGES.milled[1]],
     sack_sizes: [
       { size_kg: 5, price: 290 },
       { size_kg: 10, price: 570 }
@@ -328,7 +344,7 @@ const PRODUCTS = [
     description: 'High-yielding RC222 variety known for its excellent cooking quality and taste.',
     price_per_kg: 48,
     available_quantity: 700,
-    images: ['rice4.jpg', 'rice1.jpg'],
+    images: [RICE_IMAGES.milled[3], RICE_IMAGES.milled[0]],
     sack_sizes: [
       { size_kg: 5, price: 240 },
       { size_kg: 10, price: 470 },
@@ -343,7 +359,7 @@ const PRODUCTS = [
     description: 'Certified organic paddy rice grown without chemical fertilizers or pesticides.',
     price_per_kg: 32,
     available_quantity: 400,
-    images: ['unmilledrice1.jpg', 'unmilledrice2.jpg'],
+    images: [RICE_IMAGES.unmilled[0], RICE_IMAGES.unmilled[1]],
     sack_sizes: [
       { size_kg: 25, price: 800 },
       { size_kg: 50, price: 1550 }
@@ -357,7 +373,7 @@ const PRODUCTS = [
     description: '100% certified organic white rice. No chemicals, just pure natural goodness from Bulacan.',
     price_per_kg: 78,
     available_quantity: 200,
-    images: ['rice3.jpg', 'rice5.webp'],
+    images: [RICE_IMAGES.milled[2], RICE_IMAGES.milled[4]],
     sack_sizes: [
       { size_kg: 5, price: 390 },
       { size_kg: 10, price: 760 }
@@ -370,7 +386,7 @@ const PRODUCTS = [
     description: 'Nutritious red rice variety rich in antioxidants. A healthy alternative to white rice.',
     price_per_kg: 85,
     available_quantity: 150,
-    images: ['rice2.jpg', 'rice4.jpg'],
+    images: [RICE_IMAGES.milled[1], RICE_IMAGES.milled[3]],
     sack_sizes: [
       { size_kg: 5, price: 425 },
       { size_kg: 10, price: 830 }
@@ -383,7 +399,7 @@ const PRODUCTS = [
     description: 'Traditional black rice variety. Known for its nutty flavor and high nutritional value.',
     price_per_kg: 95,
     available_quantity: 100,
-    images: ['rice1.jpg'],
+    images: [RICE_IMAGES.milled[0]],
     sack_sizes: [
       { size_kg: 5, price: 475 },
       { size_kg: 10, price: 920 }
@@ -654,12 +670,12 @@ async function seedProducts(farmerIds) {
     const productId = productResult.rows[0].product_id;
     productIds.push(productId);
 
-    // Add images (using local file paths that the app can serve)
+    // Add images (using web URLs)
     for (let i = 0; i < product.images.length; i++) {
       await pool.query(
         `INSERT INTO product_images (product_id, image_url, image_order)
          VALUES ($1, $2, $3)`,
-        [productId, `/assets/rice/${product.images[i]}`, i]
+        [productId, product.images[i], i]
       );
     }
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 require('dotenv').config();
 
 const pool = require('./config/database');
@@ -26,6 +27,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files from the assets folder
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // Health check route
 app.get('/health', (req, res) => {

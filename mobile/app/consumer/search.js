@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { consumerAPI } from "../../services/api";
+import { consumerAPI, getImageUrl } from "../../services/api";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -189,7 +189,7 @@ export default function SearchScreen() {
                 >
                   <View style={styles.productImageContainer}>
                     {product.images && product.images.length > 0 ? (
-                      <Image source={{ uri: product.images[0] }} style={styles.productImage} />
+                      <Image source={{ uri: getImageUrl(product.images[0]) }} style={styles.productImage} />
                     ) : (
                       <View style={styles.productImage}>
                         <Text style={styles.productImagePlaceholder}>🌾</Text>

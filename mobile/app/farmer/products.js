@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { productAPI } from "../../services/api";
+import { productAPI, getImageUrl } from "../../services/api";
 import { Wheat, Edit, Archive, Power, Package } from "lucide-react-native";
 
 export default function ProductsScreen() {
@@ -148,7 +148,7 @@ export default function ProductsScreen() {
 
             {product.images && product.images.length > 0 ? (
               <Image
-                source={{ uri: product.images[0] }}
+                source={{ uri: getImageUrl(product.images[0]) }}
                 style={styles.productImage}
                 defaultSource={require('../../assets/images/icon.png')}
               />
