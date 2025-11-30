@@ -8,6 +8,7 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
@@ -83,6 +84,11 @@ export default function SignupScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.header}>
+        <Image 
+          source={require('../../assets/images/agritrade_logo.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.title}>Create Account</Text>
         <Text style={styles.subtitle}>Join AgriTrade today</Text>
       </View>
@@ -225,6 +231,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: 30,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: 10,
   },
   title: {
     fontSize: 28,

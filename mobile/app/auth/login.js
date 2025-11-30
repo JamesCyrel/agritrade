@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
@@ -146,7 +147,11 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>AgriTrade</Text>
+        <Image 
+          source={require('../../assets/images/agritrade_logo.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
         <Text style={styles.subtitle}>Farm-to-Consumer Marketplace</Text>
       </View>
 
@@ -225,6 +230,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     marginBottom: 40,
+  },
+  logo: {
+    width: 150,
+    height: 150,
+    marginBottom: 10,
   },
   title: {
     fontSize: 32,
