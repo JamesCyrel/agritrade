@@ -8,10 +8,22 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Cross-platform alert helper
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+    const okBtn = buttons?.find(b => b.text === 'OK');
+    if (okBtn?.onPress) okBtn.onPress();
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -23,7 +35,7 @@ export default function LoginScreen() {
   const handleLogin = async () => {
     // Validation
     if (!email.trim()) {
-      Alert.alert(
+      showAlert(
         "⚠️ Missing Information",
         "Please enter your email or phone number to continue.",
         [{ text: "OK", style: "default" }]
@@ -32,7 +44,7 @@ export default function LoginScreen() {
     }
 
     if (!password.trim()) {
-      Alert.alert(
+      showAlert(
         "⚠️ Missing Password",
         "Please enter your password to continue.",
         [{ text: "OK", style: "default" }]
@@ -80,12 +92,11 @@ export default function LoginScreen() {
           message = "The email or phone number you entered is invalid. Please check and try again.";
         }
 
-        Alert.alert(
+        showAlert(
           title,
           message,
           [
             { text: "OK", style: "default" },
-            { text: "Sign Up", style: "cancel", onPress: () => router.push("/auth/signup") }
           ]
         );
       }
@@ -108,12 +119,11 @@ export default function LoginScreen() {
           message = "The email or phone number you entered is invalid. Please check and try again.";
         }
 
-        Alert.alert(
+        showAlert(
           title,
           message,
           [
             { text: "OK", style: "default" },
-            { text: "Sign Up", style: "cancel", onPress: () => router.push("/auth/signup") }
           ]
         );
       } else {
@@ -129,7 +139,7 @@ export default function LoginScreen() {
           message = "The request took too long. Please check your connection and try again.";
         }
 
-        Alert.alert(
+        showAlert(
           title,
           message,
           [{ text: "OK", style: "default" }]

@@ -7,11 +7,25 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../../services/api";
 import { User } from "lucide-react-native";
+
+// Cross-platform alert helper
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    const confirmBtn = buttons?.find(b => b.style === 'destructive' || b.text === 'Logout');
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result && confirmBtn?.onPress) {
+      confirmBtn.onPress();
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function AdminProfileScreen() {
   const router = useRouter();
@@ -38,7 +52,7 @@ export default function AdminProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       "Logout",
       "Are you sure you want to logout?",
       [

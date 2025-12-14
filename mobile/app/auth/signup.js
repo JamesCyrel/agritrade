@@ -9,10 +9,22 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { authAPI } from "../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Cross-platform alert helper
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    window.alert(`${title}\n\n${message}`);
+    const okBtn = buttons?.find(b => b.text === 'OK');
+    if (okBtn?.onPress) okBtn.onPress();
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -27,17 +39,17 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!email && !phone) {
-      Alert.alert("Error", "Please provide either email or phone number");
+      showAlert("Error", "Please provide either email or phone number");
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert("Error", "Password must be at least 8 characters long");
+      showAlert("Error", "Password must be at least 8 characters long");
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Error", "Passwords do not match");
+      showAlert("Error", "Passwords do not match");
       return;
     }
 
@@ -64,11 +76,11 @@ export default function SignupScreen() {
         // Otherwise default
         router.replace(response.data.redirectPath);
       } else {
-        Alert.alert("Signup Failed", response.message || "Unable to create account");
+        showAlert("Signup Failed", response.message || "Unable to create account");
       }
     } catch (error) {
       console.error("Signup error:", error);
-      Alert.alert(
+      showAlert(
         "Signup Error",
         error.message || "Unable to connect to server. Please check your internet connection."
       );

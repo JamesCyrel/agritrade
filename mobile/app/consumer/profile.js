@@ -9,11 +9,25 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../services/api";
 import { User, MapPin, CreditCard } from "lucide-react-native";
+
+// Cross-platform alert helper
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    const confirmBtn = buttons?.find(b => b.style === 'destructive' || b.text === 'Logout' || b.text === 'OK');
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result && confirmBtn?.onPress) {
+      confirmBtn.onPress();
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function ConsumerProfileScreen() {
   const router = useRouter();
@@ -262,7 +276,7 @@ export default function ConsumerProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       "🚪 Logout",
       "Are you sure you want to logout?",
       [

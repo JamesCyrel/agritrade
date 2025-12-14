@@ -1,9 +1,22 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert } from "react-native";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
 import { Wheat, Package, ClipboardList, DollarSign, Star } from "lucide-react-native";
+
+// Cross-platform alert helper
+const showAlert = (title, message, buttons) => {
+  if (Platform.OS === 'web') {
+    const confirmBtn = buttons?.find(b => b.style === 'destructive' || b.text === 'Logout');
+    const result = window.confirm(`${title}\n\n${message}`);
+    if (result && confirmBtn?.onPress) {
+      confirmBtn.onPress();
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
 
 export default function FarmerProfileScreen() {
   const router = useRouter();
@@ -33,7 +46,7 @@ export default function FarmerProfileScreen() {
   const [proofOfAddress, setProofOfAddress] = useState("");
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       "🚪 Logout",
       "Are you sure you want to logout?",
       [
