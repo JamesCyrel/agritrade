@@ -8,7 +8,7 @@ const configuredRoot =
   Constants.expoConfig?.extra?.EXPO_PUBLIC_API_URL ||
   Constants.manifest?.extra?.EXPO_PUBLIC_API_URL; // fallback for classic manifest
 
-const defaultRoot = Platform.OS === 'android' ? 'http://192.168.0.116:3000' : 'http://localhost:3000';
+const defaultRoot = Platform.OS === 'android' ? 'http://192.168.12.1:3000' : 'http://localhost:3000';
 
 // Server base URL (without /api)
 const SERVER_BASE_URL = (configuredRoot || defaultRoot).replace(/\/$/, '');

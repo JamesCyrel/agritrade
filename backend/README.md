@@ -1,98 +1,184 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🌾 AgriTrade Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+NestJS-based REST API for the AgriTrade mobile marketplace.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
-
-## Description
-
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## 🚀 Quick Start
 
 ```bash
-$ npm install
+# Install dependencies
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your database URL
+
+# Initialize database
+psql -U postgres -d postgres -f init.sql
+
+# Seed sample data
+npm run seed
+
+# Start server
+npm run start
 ```
 
-## Compile and run the project
+## ⚙️ Environment Variables
 
+Create a `.env` file in the backend directory:
+
+```env
+# Database
+SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-change-in-production
+
+# Server
+PORT=3000
+```
+
+## 📦 Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run start` | Start production server |
+| `npm run start:dev` | Start with hot-reload (watch mode) |
+| `npm run start:debug` | Start with debugger |
+| `npm run build` | Build for production |
+| `npm run seed` | Seed database with sample data |
+| `npm run lint` | Run ESLint |
+| `npm run test` | Run unit tests |
+| `npm run test:e2e` | Run end-to-end tests |
+
+## 🗃️ Database Setup
+
+### Initialize Tables
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+psql -U postgres -d postgres -f init.sql
 ```
 
-## Run tests
-
+### Seed Sample Data
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run seed
 ```
 
-## Deployment
+This creates:
+- 1 Admin user
+- 3 Farmer users (with profiles and products)
+- 2 Consumer users (with addresses)
+- 6 Products (with sack sizes)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+### Test Accounts
+All use password: `password123`
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+| Role | Email |
+|------|-------|
+| Admin | admin@agritrade.com |
+| Farmer | juan.farmer@example.com |
+| Farmer | maria.farmer@example.com |
+| Farmer | pedro.farmer@example.com |
+| Consumer | consumer1@example.com |
+| Consumer | consumer2@example.com |
 
+## 🌐 API Endpoints
+
+### Authentication (`/api/auth`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/signup` | Register new user |
+| POST | `/login` | Login and get JWT |
+| GET | `/verify` | Verify JWT token |
+
+### Farmer (`/api/farmer`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/profile` | Get farmer profile |
+| PUT | `/profile` | Update farmer profile |
+| POST | `/verification/documents` | Upload verification docs |
+| GET | `/verification/status` | Get verification status |
+
+### Products (`/api/farmer/products`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Get all farmer products |
+| POST | `/` | Create new product |
+| GET | `/:productId` | Get product by ID |
+| PUT | `/:productId` | Update product |
+| POST | `/:productId/archive` | Archive product |
+| POST | `/:productId/unarchive` | Unarchive product |
+| PUT | `/:productId/inventory` | Update inventory |
+
+### Consumer (`/api/consumer`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/profile` | Get consumer profile |
+| PUT | `/profile` | Update consumer profile |
+| GET | `/products/search` | Search products |
+| GET | `/homepage` | Get homepage data |
+
+### Admin (`/api/admin`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/users` | List all users |
+| GET | `/verifications/pending` | Get pending verifications |
+
+## 📱 Mobile Development
+
+When testing with a mobile device via hotspot, the backend listens on all interfaces (`0.0.0.0`).
+
+### Allow firewall access
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+sudo ufw allow 3000/tcp
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+### Verify backend is accessible
+From your phone's browser (connected to hotspot):
+```
+http://192.168.12.1:3000/
+```
+Should return: `Hello World!`
 
-## Resources
+## 🗂️ Project Structure
 
-Check out a few resources that may come in handy when working with NestJS:
+```
+backend/
+├── src/
+│   ├── admin/           # Admin module
+│   ├── auth/            # Authentication (JWT, guards)
+│   ├── common/          # Shared utilities
+│   ├── consumer/        # Consumer module
+│   ├── database/        # Database connection & seeding
+│   ├── farmers/         # Farmers module
+│   ├── products/        # Products module
+│   ├── users/           # Users module
+│   ├── app.module.ts    # Main app module
+│   └── main.ts          # Entry point
+├── init.sql             # Database schema
+├── .env                 # Environment variables
+└── package.json
+```
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 🔧 Troubleshooting
 
-## Support
+### Port already in use
+```bash
+lsof -ti:3000 | xargs kill -9
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Database connection failed
+```bash
+# Check PostgreSQL is running
+sudo systemctl status postgresql
 
-## Stay in touch
+# Test connection
+psql -U postgres -d postgres -c "SELECT 1"
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+### Mobile can't connect
+1. Ensure listening on `0.0.0.0` (check `src/main.ts`)
+2. Open firewall: `sudo ufw allow 3000/tcp`
+3. Verify IP: `ip addr show | grep "192.168"`
 
-## License
+## 📄 License
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+MIT License
