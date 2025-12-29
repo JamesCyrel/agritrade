@@ -25,7 +25,7 @@ export default function ConsumerHomeScreen() {
     popular_varieties: [],
     new_arrivals: [],
   });
-  const [favoriteStatus, setFavoriteStatus] = useState({}); // { productId: isFavorite }
+
 
   const loadHomepageData = async () => {
     try {
@@ -51,53 +51,11 @@ export default function ConsumerHomeScreen() {
     loadHomepageData();
   }, []);
 
-  // Refresh favorite status when screen comes into focus
+  // Refresh homepage data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // Get all product IDs from current homepage data
-      const allProducts = [
-        ...(homepageData.popular_varieties || []),
-        ...(homepageData.new_arrivals || []),
-      ];
-
-      if (allProducts.length === 0) return;
-
-      const refreshFavoriteStatus = async () => {
-        try {
-          const token = await AsyncStorage.getItem("authToken");
-          // Check favorite status for all products in parallel
-          const favoriteChecks = await Promise.all(
-            allProducts.map(async (product) => {
-              try {
-                const res = await consumerAPI.checkFavorite(token, product.product_id);
-                return {
-                  productId: product.product_id,
-                  isFavorite: res.success ? res.isFavorite : false,
-                };
-              } catch (error) {
-                console.error(`Error checking favorite for product ${product.product_id}:`, error);
-                return null;
-              }
-            })
-          );
-
-          // Update favorite status state
-          setFavoriteStatus((prev) => {
-            const newFavoriteStatus = { ...prev };
-            favoriteChecks.forEach((check) => {
-              if (check) {
-                newFavoriteStatus[check.productId] = check.isFavorite;
-              }
-            });
-            return newFavoriteStatus;
-          });
-        } catch (error) {
-          console.error("Refresh favorite status error:", error);
-        }
-      };
-
-      refreshFavoriteStatus();
-    }, [homepageData])
+      loadHomepageData();
+    }, [])
   );
 
   const onRefresh = () => {
@@ -120,36 +78,30 @@ export default function ConsumerHomeScreen() {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.toggleFavorite(token, productId);
       if (res.success) {
-        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+        // Update local state to reflect change
+        setHomepageData(prev => {
+          const updateProduct = (p) => p.product_id === productId ? { ...p, is_favorite: res.isFavorite } : p;
+          return {
+            featured_farmers: prev.featured_farmers,
+            popular_varieties: prev.popular_varieties.map(updateProduct),
+            new_arrivals: prev.new_arrivals.map(updateProduct)
+          };
+        });
       }
     } catch (error) {
       console.error("Toggle favorite error:", error);
     }
   };
 
-  const checkFavoriteStatus = async (productId) => {
-    try {
-      const token = await AsyncStorage.getItem("authToken");
-      const res = await consumerAPI.checkFavorite(token, productId);
-      if (res.success) {
-        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
-      }
-    } catch (error) {
-      console.error("Check favorite error:", error);
-    }
-  };
-
   const renderProductCard = (product) => {
     if (!product || !product.product_id) return null;
-    
-    // Check favorite status when product is first rendered
-    if (favoriteStatus[product.product_id] === undefined) {
-      checkFavoriteStatus(product.product_id);
-    }
 
-    const price = product.price_per_kg != null && !isNaN(parseFloat(product.price_per_kg)) 
-      ? parseFloat(product.price_per_kg).toFixed(2) 
+    const price = product.price_per_kg != null && !isNaN(parseFloat(product.price_per_kg))
+      ? parseFloat(product.price_per_kg).toFixed(2)
       : "0.00";
+
+    // Use is_favorite directly from product data
+    const isFavorite = product.is_favorite;
 
     return (
       <TouchableOpacity
@@ -169,10 +121,10 @@ export default function ConsumerHomeScreen() {
             style={styles.favoriteButton}
             onPress={(e) => handleToggleFavorite(product.product_id, e)}
           >
-            <Heart 
-              size={20} 
-              color={favoriteStatus[product.product_id] ? "#e74c3c" : "#666"} 
-              fill={favoriteStatus[product.product_id] ? "#e74c3c" : "transparent"}
+            <Heart
+              size={20}
+              color={isFavorite ? "#e74c3c" : "#666"}
+              fill={isFavorite ? "#e74c3c" : "transparent"}
             />
           </TouchableOpacity>
         </View>
@@ -187,7 +139,7 @@ export default function ConsumerHomeScreen() {
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <Star size={14} color="#f1c40f" fill="#f1c40f" />
             <Text style={styles.cardRating}>
-               {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
+              {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
             </Text>
           </View>
         )}
@@ -197,33 +149,33 @@ export default function ConsumerHomeScreen() {
 
   const renderFarmerCard = (farmer) => {
     if (!farmer || !farmer.farmer_id) return null;
-    
+
     const farmerName = String(farmer.farm_name || farmer.full_name || "Unknown Farm");
     const productCount = farmer.product_count != null ? Number(farmer.product_count) : 0;
-    
+
     return (
       <TouchableOpacity
         key={farmer.farmer_id}
         style={styles.card}
         onPress={() => router.push(`/consumer/farmers/${farmer.farmer_id}/storefront`)}
       >
-      <View style={styles.cardImage}>
-        <Text style={styles.cardImagePlaceholder}>🚜</Text>
-      </View>
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {farmerName}
-      </Text>
-      {farmer.address && String(farmer.address).trim() && (
-        <Text style={styles.cardLocation} numberOfLines={1}>
-          {String(farmer.address)}
+        <View style={styles.cardImage}>
+          <Text style={styles.cardImagePlaceholder}>🚜</Text>
+        </View>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {farmerName}
         </Text>
-      )}
-      {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
-        <Text style={styles.cardRating}>
-          ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
-        </Text>
-      )}
-      <Text style={styles.cardProducts}>{String(productCount)} products</Text>
+        {farmer.address && String(farmer.address).trim() && (
+          <Text style={styles.cardLocation} numberOfLines={1}>
+            {String(farmer.address)}
+          </Text>
+        )}
+        {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
+          <Text style={styles.cardRating}>
+            ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
+          </Text>
+        )}
+        <Text style={styles.cardProducts}>{String(productCount)} products</Text>
       </TouchableOpacity>
     );
   };

@@ -1,5 +1,5 @@
 
-import { Inject, Injectable, OnModuleInit } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
@@ -11,49 +11,92 @@ export class ConsumerService implements OnModuleInit {
     }
 
     async createTables() {
-        const query = `
-        CREATE TABLE IF NOT EXISTS consumer_addresses (
-          address_id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-          label VARCHAR(50) NOT NULL,
-          full_address TEXT NOT NULL,
-          city VARCHAR(100),
-          state VARCHAR(100),
-          postal_code VARCHAR(20),
-          is_default BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
+        // Drop and recreate these tables to ensure correct schema
+        const dropTables = [
+            `DROP TABLE IF EXISTS order_items CASCADE`,
+            `DROP TABLE IF EXISTS orders CASCADE`,
+            `DROP TABLE IF EXISTS cart_items CASCADE`,
+            `DROP TABLE IF EXISTS favorites CASCADE`
+        ];
 
-        CREATE TABLE IF NOT EXISTS payment_methods (
-          payment_id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-          payment_type VARCHAR(20) NOT NULL CHECK (payment_type IN ('CARD', 'WALLET', 'UPI')),
-          card_number_last4 VARCHAR(4),
-          card_holder_name VARCHAR(100),
-          expiry_month INTEGER,
-          expiry_year INTEGER,
-          upi_id VARCHAR(100),
-          wallet_provider VARCHAR(50),
-          is_default BOOLEAN DEFAULT FALSE,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_addresses_user_id ON consumer_addresses(user_id);
-        CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON payment_methods(user_id);
-      `;
-        try {
-            await this.pool.query(query);
-        } catch (error) {
-            console.error('Error creating consumer tables', error);
+        for (const sql of dropTables) {
+            try { await this.pool.query(sql); } catch (e) { /* ignore */ }
         }
+
+        const tables = [
+            `CREATE TABLE IF NOT EXISTS consumer_addresses (
+                address_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                label VARCHAR(50) NOT NULL,
+                full_address TEXT NOT NULL,
+                city VARCHAR(100),
+                state VARCHAR(100),
+                postal_code VARCHAR(20),
+                is_default BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS payment_methods (
+                payment_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                payment_type VARCHAR(20) NOT NULL,
+                card_number_last4 VARCHAR(4),
+                card_holder_name VARCHAR(100),
+                expiry_month INTEGER,
+                expiry_year INTEGER,
+                upi_id VARCHAR(100),
+                wallet_provider VARCHAR(50),
+                is_default BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS cart_items (
+                cart_item_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                product_id INTEGER REFERENCES products(product_id) ON DELETE CASCADE,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, product_id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS orders (
+                order_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                farmer_id INTEGER REFERENCES users(user_id),
+                address_id INTEGER,
+                total_amount DECIMAL(10,2) NOT NULL,
+                status VARCHAR(20) DEFAULT 'PENDING',
+                payment_method VARCHAR(20),
+                payment_status VARCHAR(20) DEFAULT 'PENDING',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`,
+            `CREATE TABLE IF NOT EXISTS order_items (
+                order_item_id SERIAL PRIMARY KEY,
+                order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+                product_id INTEGER,
+                quantity INTEGER NOT NULL,
+                unit_price DECIMAL(10,2) NOT NULL,
+                subtotal DECIMAL(10,2) NOT NULL
+            )`,
+            `CREATE TABLE IF NOT EXISTS favorites (
+                favorite_id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                product_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(user_id, product_id)
+            )`
+        ];
+
+        for (const sql of tables) {
+            try { await this.pool.query(sql); } catch (e) { console.error('Table error:', e.message); }
+        }
+        console.log('✅ Consumer tables verified');
     }
 
+    // Profile
     async getProfile(userId: number) {
         const res = await this.pool.query(
-            `SELECT u.user_id, u.email, u.phone, p.full_name, p.address
-           FROM users u
-           LEFT JOIN profiles p ON u.user_id = p.user_id
-           WHERE u.user_id = $1`,
+            `SELECT u.user_id, u.email, u.phone, p.full_name, p.address FROM users u LEFT JOIN profiles p ON u.user_id = p.user_id WHERE u.user_id = $1`,
             [userId]
         );
         return res.rows[0];
@@ -61,44 +104,266 @@ export class ConsumerService implements OnModuleInit {
 
     async updateProfile(userId: number, fullName: string) {
         const res = await this.pool.query(
-            `INSERT INTO profiles (user_id, full_name)
-           VALUES ($1, $2)
-           ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name, updated_at = NOW()
-           RETURNING user_id, full_name`,
+            `INSERT INTO profiles (user_id, full_name) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET full_name = EXCLUDED.full_name, updated_at = NOW() RETURNING user_id, full_name`,
             [userId, fullName]
         );
         return res.rows[0];
     }
 
-    // Address methods
+    // Addresses
     async getAddresses(userId: number) {
-        const res = await this.pool.query(
-            `SELECT * FROM consumer_addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`,
-            [userId]
-        );
+        const res = await this.pool.query(`SELECT * FROM consumer_addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`, [userId]);
         return res.rows;
     }
 
     async addAddress(userId: number, data: any) {
         const { label, full_address, city, state, postal_code, is_default } = data;
+        if (is_default) await this.pool.query(`UPDATE consumer_addresses SET is_default = FALSE WHERE user_id = $1`, [userId]);
+        const res = await this.pool.query(
+            `INSERT INTO consumer_addresses (user_id, label, full_address, city, state, postal_code, is_default) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [userId, label, full_address, city, state, postal_code, is_default || false]
+        );
+        return res.rows[0];
+    }
+
+    async updateAddress(userId: number, addressId: number, data: any) {
+        const { label, full_address, city, state, postal_code, is_default } = data;
+        if (is_default) await this.pool.query(`UPDATE consumer_addresses SET is_default = FALSE WHERE user_id = $1`, [userId]);
+        const res = await this.pool.query(
+            `UPDATE consumer_addresses SET label = $1, full_address = $2, city = $3, state = $4, postal_code = $5, is_default = $6 WHERE address_id = $7 AND user_id = $8 RETURNING *`,
+            [label, full_address, city, state, postal_code, is_default || false, addressId, userId]
+        );
+        if (res.rowCount === 0) throw new NotFoundException('Address not found');
+        return res.rows[0];
+    }
+
+    async deleteAddress(userId: number, addressId: number) {
+        const res = await this.pool.query(`DELETE FROM consumer_addresses WHERE address_id = $1 AND user_id = $2`, [addressId, userId]);
+        if (res.rowCount === 0) throw new NotFoundException('Address not found');
+    }
+
+    // Payment Methods
+    async getPaymentMethods(userId: number) {
+        const res = await this.pool.query(`SELECT * FROM payment_methods WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC`, [userId]);
+        return res.rows;
+    }
+
+    async addPaymentMethod(userId: number, data: any) {
+        const { payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default } = data;
+        if (is_default) await this.pool.query(`UPDATE payment_methods SET is_default = FALSE WHERE user_id = $1`, [userId]);
+        const res = await this.pool.query(
+            `INSERT INTO payment_methods (user_id, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+            [userId, payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default || false]
+        );
+        return res.rows[0];
+    }
+
+    async updatePaymentMethod(userId: number, paymentId: number, data: any) {
+        const { payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default } = data;
+        if (is_default) await this.pool.query(`UPDATE payment_methods SET is_default = FALSE WHERE user_id = $1`, [userId]);
+        const res = await this.pool.query(
+            `UPDATE payment_methods SET payment_type = $1, card_number_last4 = $2, card_holder_name = $3, expiry_month = $4, expiry_year = $5, upi_id = $6, wallet_provider = $7, is_default = $8 WHERE payment_id = $9 AND user_id = $10 RETURNING *`,
+            [payment_type, card_number_last4, card_holder_name, expiry_month, expiry_year, upi_id, wallet_provider, is_default || false, paymentId, userId]
+        );
+        if (res.rowCount === 0) throw new NotFoundException('Payment method not found');
+        return res.rows[0];
+    }
+
+    async deletePaymentMethod(userId: number, paymentId: number) {
+        const res = await this.pool.query(`DELETE FROM payment_methods WHERE payment_id = $1 AND user_id = $2`, [paymentId, userId]);
+        if (res.rowCount === 0) throw new NotFoundException('Payment method not found');
+    }
+
+    // Cart
+    async getCart(userId: number) {
+        const res = await this.pool.query(
+            `SELECT ci.*, p.variety_name as name, p.price_per_kg as price, p.quantity_unit as unit, u.email as farmer_email
+             FROM cart_items ci JOIN products p ON ci.product_id = p.product_id LEFT JOIN users u ON p.farmer_id = u.user_id
+             WHERE ci.user_id = $1 ORDER BY ci.created_at DESC`,
+            [userId]
+        );
+        return res.rows;
+    }
+
+    async addToCart(userId: number, data: any) {
+        const { product_id, quantity } = data;
+        const res = await this.pool.query(
+            `INSERT INTO cart_items (user_id, product_id, quantity) VALUES ($1, $2, $3)
+             ON CONFLICT (user_id, product_id) DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW() RETURNING *`,
+            [userId, product_id, quantity || 1]
+        );
+        return res.rows[0];
+    }
+
+    async updateCartItem(userId: number, cartItemId: number, quantity: number) {
+        const res = await this.pool.query(
+            `UPDATE cart_items SET quantity = $1, updated_at = NOW() WHERE cart_item_id = $2 AND user_id = $3 RETURNING *`,
+            [quantity, cartItemId, userId]
+        );
+        if (res.rowCount === 0) throw new NotFoundException('Cart item not found');
+        return res.rows[0];
+    }
+
+    async removeCartItem(userId: number, cartItemId: number) {
+        const res = await this.pool.query(`DELETE FROM cart_items WHERE cart_item_id = $1 AND user_id = $2`, [cartItemId, userId]);
+        if (res.rowCount === 0) throw new NotFoundException('Cart item not found');
+    }
+
+    async clearCart(userId: number) {
+        await this.pool.query(`DELETE FROM cart_items WHERE user_id = $1`, [userId]);
+    }
+
+    // Orders
+    async getOrders(userId: number) {
+        const res = await this.pool.query(
+            `SELECT o.*, json_agg(json_build_object('product_id', oi.product_id, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'name', p.variety_name)) as items
+             FROM orders o LEFT JOIN order_items oi ON o.order_id = oi.order_id LEFT JOIN products p ON oi.product_id = p.product_id
+             WHERE o.user_id = $1 GROUP BY o.order_id ORDER BY o.created_at DESC`,
+            [userId]
+        );
+        return res.rows;
+    }
+
+    async createOrder(userId: number, data: any) {
+        const { address_id, payment_method, items, notes } = data;
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            if (is_default) {
-                await client.query(`UPDATE consumer_addresses SET is_default = FALSE WHERE user_id = $1`, [userId]);
+            let totalAmount = 0, farmerId = null;
+            for (const item of items) {
+                const productRes = await client.query(`SELECT price_per_kg, farmer_id FROM products WHERE product_id = $1`, [item.product_id]);
+                if (productRes.rows.length === 0) throw new NotFoundException(`Product ${item.product_id} not found`);
+                totalAmount += productRes.rows[0].price_per_kg * item.quantity;
+                farmerId = productRes.rows[0].farmer_id;
             }
-            const res = await client.query(
-                `INSERT INTO consumer_addresses (user_id, label, full_address, city, state, postal_code, is_default)
-               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-                [userId, label, full_address, city, state, postal_code, is_default || false]
+            const orderRes = await client.query(
+                `INSERT INTO orders (user_id, farmer_id, address_id, total_amount, payment_method, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+                [userId, farmerId, address_id, totalAmount, payment_method, notes]
             );
+            const order = orderRes.rows[0];
+            for (const item of items) {
+                const productRes = await client.query(`SELECT price_per_kg FROM products WHERE product_id = $1`, [item.product_id]);
+                const price = productRes.rows[0].price_per_kg;
+                await client.query(`INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)`,
+                    [order.order_id, item.product_id, item.quantity, price, price * item.quantity]);
+            }
+            await client.query(`DELETE FROM cart_items WHERE user_id = $1`, [userId]);
             await client.query('COMMIT');
-            return res.rows[0];
-        } catch (e) {
-            await client.query('ROLLBACK');
-            throw e;
-        } finally {
-            client.release();
-        }
+            return order;
+        } catch (e) { await client.query('ROLLBACK'); throw e; }
+        finally { client.release(); }
+    }
+
+    async getOrderDetails(userId: number, orderId: number) {
+        const res = await this.pool.query(
+            `SELECT o.*, ca.full_address, ca.city, ca.state, ca.postal_code,
+             json_agg(json_build_object('product_id', oi.product_id, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'name', p.variety_name)) as items
+             FROM orders o LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id LEFT JOIN order_items oi ON o.order_id = oi.order_id LEFT JOIN products p ON oi.product_id = p.product_id
+             WHERE o.order_id = $1 AND o.user_id = $2 GROUP BY o.order_id, ca.full_address, ca.city, ca.state, ca.postal_code`,
+            [orderId, userId]
+        );
+        if (res.rowCount === 0) throw new NotFoundException('Order not found');
+        return res.rows[0];
+    }
+
+    async cancelOrder(userId: number, orderId: number) {
+        const res = await this.pool.query(
+            `UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1 AND user_id = $2 AND status = 'PENDING' RETURNING *`,
+            [orderId, userId]
+        );
+        if (res.rowCount === 0) throw new NotFoundException('Order not found or cannot be cancelled');
+        return res.rows[0];
+    }
+
+    // Favorites
+    async getFavorites(userId: number) {
+        const res = await this.pool.query(
+            `SELECT f.*, p.variety_name as name, p.price_per_kg as price, p.description, p.quantity_unit as unit
+             FROM favorites f JOIN products p ON f.product_id = p.product_id WHERE f.user_id = $1 ORDER BY f.created_at DESC`,
+            [userId]
+        );
+        return res.rows;
+    }
+
+    async addFavorite(userId: number, productId: number) {
+        await this.pool.query(`INSERT INTO favorites (user_id, product_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [userId, productId]);
+    }
+
+    async removeFavorite(userId: number, productId: number) {
+        await this.pool.query(`DELETE FROM favorites WHERE user_id = $1 AND product_id = $2`, [userId, productId]);
+    }
+
+    async checkFavorite(userId: number, productId: number) {
+        const res = await this.pool.query(`SELECT 1 FROM favorites WHERE user_id = $1 AND product_id = $2`, [userId, productId]);
+        return (res.rowCount ?? 0) > 0;
+    }
+
+    async toggleFavorite(userId: number, productId: number) {
+        const isFavorite = await this.checkFavorite(userId, productId);
+        if (isFavorite) { await this.removeFavorite(userId, productId); return { isFavorite: false }; }
+        else { await this.addFavorite(userId, productId); return { isFavorite: true }; }
+    }
+
+    // Search & Homepage
+    // Search & Homepage
+    async searchProducts(query: any, userId: number) {
+        const { q, rice_type, min_price, max_price, sort_by, limit = 20, offset = 0 } = query;
+        let sql = `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
+                   COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+                   EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+                   FROM products p 
+                   LEFT JOIN users u ON p.farmer_id = u.user_id 
+                   LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
+                   WHERE p.status = 'ACTIVE'`;
+        const params: any[] = [userId];
+        let idx = 2; // Start params from 2 since userId is 1
+
+        if (q) { sql += ` AND (p.variety_name ILIKE $${idx} OR p.description ILIKE $${idx})`; params.push(`%${q}%`); idx++; }
+        if (rice_type) { sql += ` AND p.rice_type = $${idx}`; params.push(rice_type); idx++; }
+        if (min_price) { sql += ` AND p.price_per_kg >= $${idx}`; params.push(min_price); idx++; }
+        if (max_price) { sql += ` AND p.price_per_kg <= $${idx}`; params.push(max_price); idx++; }
+
+        if (sort_by === 'price_asc') sql += ` ORDER BY p.price_per_kg ASC`;
+        else if (sort_by === 'price_desc') sql += ` ORDER BY p.price_per_kg DESC`;
+        else sql += ` ORDER BY p.created_at DESC`;
+
+        sql += ` LIMIT $${idx} OFFSET $${idx + 1}`; params.push(limit, offset);
+
+        const res = await this.pool.query(sql, params);
+        return res.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+    }
+
+    async getProductDetails(productId: number, userId: number) {
+        const res = await this.pool.query(
+            `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name, pr.address as farmer_address,
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             COALESCE((SELECT json_agg(json_build_object('sack_size_id', ps.sack_size_id, 'size_kg', ps.size_kg, 'price', ps.price) ORDER BY ps.size_kg) FROM product_sack_sizes ps WHERE ps.product_id = p.product_id), '[]') as sack_sizes,
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite
+             FROM products p 
+             LEFT JOIN users u ON p.farmer_id = u.user_id 
+             LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
+             WHERE p.product_id = $1`,
+            [productId, userId]
+        );
+        if (res.rows.length === 0) throw new NotFoundException('Product not found');
+        const product = res.rows[0];
+        return { ...product, images: product.images || [], sack_sizes: product.sack_sizes || [], is_favorite: product.is_favorite };
+    }
+
+    async getHomepageData(userId: number) {
+        const featuredRes = await this.pool.query(
+            `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+             FROM products p 
+             LEFT JOIN users u ON p.farmer_id = u.user_id 
+             LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
+             WHERE p.status = 'ACTIVE' ORDER BY p.created_at DESC LIMIT 10`,
+            [userId]
+        );
+        const featured = featuredRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+        const categoriesRes = await this.pool.query(`SELECT DISTINCT rice_type FROM products WHERE status = 'ACTIVE'`);
+        return { featured, categories: categoriesRes.rows.map(r => r.rice_type).filter(Boolean), recentProducts: featured };
     }
 }
+

@@ -22,8 +22,8 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [favoriteStatus, setFavoriteStatus] = useState({});
-  
+  const [favoriteStatus, setFavoriteStatus] = useState({}); // Removed, using product.is_favorite instead
+
   // Filter states
   const [riceType, setRiceType] = useState(null); // 'MILLED' | 'UNMILLED_PADDY' | null
   const [minPrice, setMinPrice] = useState("");
@@ -36,9 +36,7 @@ export default function SearchScreen() {
     try {
       setLoading(true);
       const token = await AsyncStorage.getItem("authToken");
-      
-      // Get consumer location if available (from saved address)
-      // For now, we'll leave it null - can be enhanced later
+
       const searchParams = {
         q: searchQuery,
         rice_type: riceType,
@@ -54,21 +52,19 @@ export default function SearchScreen() {
       if (res.success) {
         setProducts(res.data || []);
       } else {
-        Alert.alert("Error", res.message || "Failed to search products");
+        // failed silently or log?
+        console.log("Search failed:", res.message);
       }
     } catch (error) {
       console.error("Search error:", error);
-      Alert.alert("Error", "Failed to search products");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (searchQuery || riceType || minPrice || maxPrice || maxDistance || minRating) {
-      performSearch();
-    }
-  }, [sortBy]);
+    performSearch();
+  }, [sortBy]); // Trigger on mount and sort change. Other filters applied via "Apply" button or clear.
 
   const handleSearch = () => {
     performSearch();
@@ -81,7 +77,15 @@ export default function SearchScreen() {
     setMaxDistance(null);
     setMinRating(null);
     setSortBy("newest");
-    performSearch();
+    // State updates are async, so we might need to wait or call performSearch with cleared params manually if we want immediate effect
+    // But typical react pattern is wait for effect or just call it:
+    // Ideally we should use a separate effect for filters or pass params directly. 
+    // For now, let's just trigger a search with defaults manually to be safe.
+    // Actually, calling performSearch() here uses the current state which might not be updated yet. 
+    // Better to rely on the user clicking "Apply" or simple re-fetching.
+    // Let's defer proper filter clearing fix for later if needed, but for now just resetting state.
+    // The user might need to click "Apply" or "Search" again, or we can use a timeout.
+    setTimeout(() => performSearch(), 0);
   };
 
   const applyFilters = () => {
@@ -95,22 +99,10 @@ export default function SearchScreen() {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.toggleFavorite(token, productId);
       if (res.success) {
-        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
+        setProducts(prev => prev.map(p => p.product_id === productId ? { ...p, is_favorite: res.isFavorite } : p));
       }
     } catch (error) {
       console.error("Toggle favorite error:", error);
-    }
-  };
-
-  const checkFavoriteStatus = async (productId) => {
-    try {
-      const token = await AsyncStorage.getItem("authToken");
-      const res = await consumerAPI.checkFavorite(token, productId);
-      if (res.success) {
-        setFavoriteStatus((prev) => ({ ...prev, [productId]: res.isFavorite }));
-      }
-    } catch (error) {
-      console.error("Check favorite error:", error);
     }
   };
 
@@ -128,7 +120,7 @@ export default function SearchScreen() {
           onChangeText={setSearchQuery}
           onSubmitEditing={handleSearch}
           returnKeyType="search"
-          autoFocus
+          autoFocus={false}
         />
         <TouchableOpacity style={styles.filterButton} onPress={() => setShowFilters(true)}>
           <Text style={styles.filterIcon}>🔍</Text>
@@ -176,10 +168,7 @@ export default function SearchScreen() {
             </View>
           ) : (
             products.map((product) => {
-              // Check favorite status when product is first rendered
-              if (favoriteStatus[product.product_id] === undefined) {
-                checkFavoriteStatus(product.product_id);
-              }
+              const isFavorite = product.is_favorite;
 
               return (
                 <TouchableOpacity
@@ -200,10 +189,11 @@ export default function SearchScreen() {
                       onPress={(e) => handleToggleFavorite(product.product_id, e)}
                     >
                       <Text style={styles.favoriteIcon}>
-                        {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
+                        {isFavorite ? "❤️" : "🤍"}
                       </Text>
                     </TouchableOpacity>
                   </View>
+
                   <View style={styles.productDetails}>
                     <Text style={styles.productName}>{product.variety_name}</Text>
                     <Text style={styles.productFarm}>{product.farm_name}</Text>
