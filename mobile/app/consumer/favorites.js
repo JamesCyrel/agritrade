@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { consumerAPI } from "../../services/api";
+import { consumerAPI, getImageUrl } from "../../services/api";
 import { HeartCrack, Wheat, Star, Heart } from "lucide-react-native";
 
 export default function ConsumerFavoritesScreen() {
@@ -99,7 +99,7 @@ export default function ConsumerFavoritesScreen() {
               onPress={() => router.push(`/consumer/products/${item.product_id}`)}
             >
               {item.images && item.images.length > 0 ? (
-                <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+                <Image source={{ uri: getImageUrl(item.images[0]) }} style={styles.itemImage} resizeMode="cover" />
               ) : (
                 <View style={styles.itemImage}>
                   <Wheat size={32} color="#ccc" />

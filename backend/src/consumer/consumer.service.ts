@@ -289,11 +289,25 @@ export class ConsumerService implements OnModuleInit {
     // Favorites
     async getFavorites(userId: number) {
         const res = await this.pool.query(
-            `SELECT f.*, p.variety_name as name, p.price_per_kg as price, p.description, p.quantity_unit as unit
-             FROM favorites f JOIN products p ON f.product_id = p.product_id WHERE f.user_id = $1 ORDER BY f.created_at DESC`,
+            `SELECT f.favorite_id, f.user_id, f.created_at as favorite_created_at,
+             p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.product_id) as average_rating,
+             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.product_id) as total_reviews
+             FROM favorites f 
+             JOIN products p ON f.product_id = p.product_id 
+             LEFT JOIN users u ON p.farmer_id = u.user_id 
+             LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
+             WHERE f.user_id = $1 
+             ORDER BY f.created_at DESC`,
             [userId]
         );
-        return res.rows;
+        return res.rows.map(row => ({
+            ...row,
+            images: row.images || [],
+            average_rating: row.average_rating ? parseFloat(row.average_rating) : 0,
+            total_reviews: parseInt(row.total_reviews) || 0
+        }));
     }
 
     async addFavorite(userId: number, productId: number) {

@@ -139,11 +139,13 @@ export default function ProductDetailScreen() {
 
       if (res.success) {
         Alert.alert("Success", "Item added to cart", [
-          { text: "OK", onPress: () => {
-            setShowAddToCart(false);
-            setQuantity("1");
-            setSelectedSackSize(null);
-          }},
+          {
+            text: "OK", onPress: () => {
+              setShowAddToCart(false);
+              setQuantity("1");
+              setSelectedSackSize(null);
+            }
+          },
         ]);
       } else {
         Alert.alert("Error", res.message || "Failed to add item to cart");
@@ -163,7 +165,13 @@ export default function ProductDetailScreen() {
         <View>
           <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
             {product.images.map((image, index) => (
-              <Image key={index} source={{ uri: getImageUrl(image) }} style={styles.productImage} />
+              <Image
+                key={index}
+                source={{ uri: getImageUrl(image) }}
+                style={styles.productImage}
+                resizeMode="cover"
+                onError={(e) => console.log(`Failed to load image: ${getImageUrl(image)}`, e.nativeEvent.error)}
+              />
             ))}
           </ScrollView>
           <TouchableOpacity
@@ -171,9 +179,9 @@ export default function ProductDetailScreen() {
             onPress={handleToggleFavorite}
             disabled={togglingFavorite}
           >
-            <Heart 
-              size={24} 
-              color={isFavorite ? "#e74c3c" : "#666"} 
+            <Heart
+              size={24}
+              color={isFavorite ? "#e74c3c" : "#666"}
               fill={isFavorite ? "#e74c3c" : "transparent"}
             />
           </TouchableOpacity>
@@ -186,9 +194,9 @@ export default function ProductDetailScreen() {
             onPress={handleToggleFavorite}
             disabled={togglingFavorite}
           >
-            <Heart 
-              size={24} 
-              color={isFavorite ? "#e74c3c" : "#666"} 
+            <Heart
+              size={24}
+              color={isFavorite ? "#e74c3c" : "#666"}
               fill={isFavorite ? "#e74c3c" : "transparent"}
             />
           </TouchableOpacity>
@@ -251,10 +259,10 @@ export default function ProductDetailScreen() {
                 <View style={styles.ratingContainer}>
                   <View style={{ flexDirection: 'row' }}>
                     {Array.from({ length: 5 }, (_, i) => (
-                      <Star 
+                      <Star
                         key={i}
-                        size={16} 
-                        color={i < Math.round(product.average_rating) ? "#f1c40f" : "#ccc"} 
+                        size={16}
+                        color={i < Math.round(product.average_rating) ? "#f1c40f" : "#ccc"}
                         fill={i < Math.round(product.average_rating) ? "#f1c40f" : "transparent"}
                       />
                     ))}
@@ -372,9 +380,9 @@ export default function ProductDetailScreen() {
                     ? (parseFloat(quantity) || 0) * parseFloat(product.price_per_kg)
                     : product.sack_sizes?.find((s) => s.size_kg === selectedSackSize)?.price
                       ? (parseFloat(quantity) || 0) *
-                        parseFloat(
-                          product.sack_sizes.find((s) => s.size_kg === selectedSackSize).price
-                        )
+                      parseFloat(
+                        product.sack_sizes.find((s) => s.size_kg === selectedSackSize).price
+                      )
                       : 0}
                 </Text>
               </View>
