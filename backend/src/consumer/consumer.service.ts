@@ -84,6 +84,17 @@ export class ConsumerService implements OnModuleInit {
                 product_id INTEGER,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, product_id)
+            )`,
+            `CREATE TABLE IF NOT EXISTS reviews (
+                review_id SERIAL PRIMARY KEY,
+                order_id INTEGER REFERENCES orders(order_id) ON DELETE CASCADE,
+                consumer_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                farmer_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+                product_id INTEGER REFERENCES products(product_id) ON DELETE SET NULL,
+                rating INTEGER NOT NULL,
+                comment TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )`
         ];
 
@@ -351,7 +362,38 @@ export class ConsumerService implements OnModuleInit {
     }
 
     async getHomepageData(userId: number) {
-        const featuredRes = await this.pool.query(
+        // Fetch Featured Farmers (users with products or just role FARMER)
+        // Assuming farmers are users with products for now, or just users with role 'FARMER' if I could check roles.
+        // Since I don't have easy access to role check in this service without injecting another, I'll query based on having active products.
+        const farmersRes = await this.pool.query(
+            `SELECT DISTINCT ON (u.user_id) u.user_id as farmer_id, pr.full_name, pr.farm_name, pr.address,
+             (SELECT AVG(r.rating) FROM reviews r WHERE r.farmer_id = u.user_id) as average_rating,
+             (SELECT COUNT(*) FROM reviews r WHERE r.farmer_id = u.user_id) as total_reviews,
+             (SELECT COUNT(*) FROM products p2 WHERE p2.farmer_id = u.user_id AND p2.status = 'ACTIVE') as product_count
+             FROM users u
+             JOIN products p ON u.user_id = p.farmer_id
+             JOIN profiles pr ON u.user_id = pr.user_id
+             WHERE p.status = 'ACTIVE'
+             LIMIT 10`
+        );
+
+        // Fetch Popular Varieties (e.g. highest rated or just random selection for now)
+        const popularRes = await this.pool.query(
+            `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+             FROM products p 
+             LEFT JOIN users u ON p.farmer_id = u.user_id 
+             LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
+             WHERE p.status = 'ACTIVE' 
+             ORDER BY (SELECT AVG(rating) FROM reviews r WHERE r.product_id = p.product_id) DESC NULLS LAST
+             LIMIT 10`,
+            [userId]
+        );
+        const popular_varieties = popularRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+
+        // Fetch New Arrivals
+        const newArrivalsRes = await this.pool.query(
             `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
              EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
@@ -361,9 +403,13 @@ export class ConsumerService implements OnModuleInit {
              WHERE p.status = 'ACTIVE' ORDER BY p.created_at DESC LIMIT 10`,
             [userId]
         );
-        const featured = featuredRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
-        const categoriesRes = await this.pool.query(`SELECT DISTINCT rice_type FROM products WHERE status = 'ACTIVE'`);
-        return { featured, categories: categoriesRes.rows.map(r => r.rice_type).filter(Boolean), recentProducts: featured };
+        const new_arrivals = newArrivalsRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+
+        return {
+            featured_farmers: farmersRes.rows,
+            popular_varieties: popular_varieties,
+            new_arrivals: new_arrivals
+        };
     }
 }
 

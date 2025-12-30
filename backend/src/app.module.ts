@@ -1,4 +1,3 @@
-
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller';
@@ -10,10 +9,14 @@ import { FarmersModule } from './farmers/farmers.module';
 import { ProductsModule } from './products/products.module';
 import { AdminModule } from './admin/admin.module';
 import { ConsumerModule } from './consumer/consumer.module';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
 
 @Module({
   imports: [
-
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'public'),
+    }),
     ConfigModule.forRoot({ isGlobal: true }),
     DatabaseModule,
     UsersModule,
@@ -27,4 +30,3 @@ import { ConsumerModule } from './consumer/consumer.module';
   providers: [AppService],
 })
 export class AppModule { }
-
