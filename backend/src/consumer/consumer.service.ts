@@ -458,5 +458,192 @@ export class ConsumerService implements OnModuleInit {
             product_count: products.length
         };
     }
+
+    // ===================== Reviews =====================
+    async createReview(userId: number, orderId: number, rating: number, comment: string, productId?: number) {
+        // Get the farmer_id from the order
+        const orderRes = await this.pool.query(`
+            SELECT farmer_id FROM orders WHERE order_id = $1 AND user_id = $2 AND status = 'DELIVERED'
+        `, [orderId, userId]);
+
+        if (orderRes.rows.length === 0) {
+            throw new Error('Order not found or not eligible for review');
+        }
+
+        const farmerId = orderRes.rows[0].farmer_id;
+
+        const res = await this.pool.query(`
+            INSERT INTO reviews (order_id, consumer_id, farmer_id, product_id, rating, comment)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (order_id, consumer_id) DO UPDATE SET 
+                rating = EXCLUDED.rating, 
+                comment = EXCLUDED.comment,
+                updated_at = NOW()
+            RETURNING *
+        `, [orderId, userId, farmerId, productId || null, rating, comment || null]);
+
+        return res.rows[0];
+    }
+
+    async checkOrderReview(userId: number, orderId: number) {
+        const res = await this.pool.query(`
+            SELECT * FROM reviews WHERE order_id = $1 AND consumer_id = $2
+        `, [orderId, userId]);
+        return res.rows[0] || null;
+    }
+
+    async getFarmerReviews(farmerId: number, limit = 20, offset = 0) {
+        const res = await this.pool.query(`
+            SELECT r.*, p.full_name as consumer_name, pr.variety_name as product_name
+            FROM reviews r
+            LEFT JOIN profiles p ON r.consumer_id = p.user_id
+            LEFT JOIN products pr ON r.product_id = pr.product_id
+            WHERE r.farmer_id = $1
+            ORDER BY r.created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [farmerId, limit, offset]);
+        return res.rows;
+    }
+
+    async getFarmerRating(farmerId: number) {
+        const res = await this.pool.query(`
+            SELECT 
+                AVG(rating) as average_rating,
+                COUNT(*) as total_reviews,
+                COUNT(*) FILTER (WHERE rating = 5) as five_star,
+                COUNT(*) FILTER (WHERE rating = 4) as four_star,
+                COUNT(*) FILTER (WHERE rating = 3) as three_star,
+                COUNT(*) FILTER (WHERE rating = 2) as two_star,
+                COUNT(*) FILTER (WHERE rating = 1) as one_star
+            FROM reviews WHERE farmer_id = $1
+        `, [farmerId]);
+        return res.rows[0];
+    }
+
+    async getProductReviews(productId: number, limit = 20, offset = 0) {
+        const res = await this.pool.query(`
+            SELECT r.*, p.full_name as consumer_name
+            FROM reviews r
+            LEFT JOIN profiles p ON r.consumer_id = p.user_id
+            WHERE r.product_id = $1
+            ORDER BY r.created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [productId, limit, offset]);
+        return res.rows;
+    }
+
+    // ===================== Notifications =====================
+    async getNotifications(userId: number, limit = 50) {
+        const res = await this.pool.query(`
+            SELECT * FROM notifications
+            WHERE user_id = $1
+            ORDER BY created_at DESC
+            LIMIT $2
+        `, [userId, limit]);
+        return res.rows;
+    }
+
+    async markNotificationAsRead(userId: number, notificationId: number) {
+        const res = await this.pool.query(`
+            UPDATE notifications SET is_read = true WHERE notification_id = $1 AND user_id = $2
+            RETURNING *
+        `, [notificationId, userId]);
+        return res.rows[0] || null;
+    }
+
+    async markAllNotificationsAsRead(userId: number) {
+        await this.pool.query(`
+            UPDATE notifications SET is_read = true WHERE user_id = $1 AND is_read = false
+        `, [userId]);
+        return { success: true };
+    }
+
+    async getUnreadCount(userId: number) {
+        const res = await this.pool.query(`
+            SELECT COUNT(*) as unread_count FROM notifications WHERE user_id = $1 AND is_read = false
+        `, [userId]);
+        return parseInt(res.rows[0]?.unread_count || 0);
+    }
+
+    // ===================== Promo Codes =====================
+    async validatePromoCode(code: string, orderAmount: number) {
+        const res = await this.pool.query(`
+            SELECT * FROM promo_codes
+            WHERE code = $1 AND is_active = true
+            AND (valid_from IS NULL OR valid_from <= NOW())
+            AND (valid_until IS NULL OR valid_until >= NOW())
+            AND (usage_limit IS NULL OR used_count < usage_limit)
+        `, [code.toUpperCase()]);
+
+        if (res.rows.length === 0) {
+            return { valid: false, message: 'Invalid or expired promo code' };
+        }
+
+        const promo = res.rows[0];
+
+        if (orderAmount < parseFloat(promo.min_order_amount || 0)) {
+            return { valid: false, message: `Minimum order amount is ${promo.min_order_amount}` };
+        }
+
+        let discount = 0;
+        if (promo.discount_type === 'PERCENTAGE') {
+            discount = orderAmount * (parseFloat(promo.discount_value) / 100);
+            if (promo.max_discount_amount && discount > parseFloat(promo.max_discount_amount)) {
+                discount = parseFloat(promo.max_discount_amount);
+            }
+        } else {
+            discount = parseFloat(promo.discount_value);
+        }
+
+        return {
+            valid: true,
+            promo_id: promo.promo_id,
+            code: promo.code,
+            discount_type: promo.discount_type,
+            discount_value: promo.discount_value,
+            discount_amount: discount,
+            final_amount: orderAmount - discount
+        };
+    }
+
+    // ===================== COD Eligibility =====================
+    async checkCODEligibility(userId: number, orderAmount: number, farmerId?: number) {
+        // Check user's COD eligibility
+        const userEligibility = await this.pool.query(`
+            SELECT * FROM cod_eligibility WHERE user_id = $1
+        `, [userId]);
+
+        if (userEligibility.rows.length > 0) {
+            const eligibility = userEligibility.rows[0];
+            if (!eligibility.is_eligible) {
+                return { eligible: false, reason: eligibility.reason || 'COD not available for your account' };
+            }
+            if (eligibility.max_order_value && orderAmount > parseFloat(eligibility.max_order_value)) {
+                return { eligible: false, reason: `Order amount exceeds COD limit of ${eligibility.max_order_value}` };
+            }
+        }
+
+        // Check farmer's COD settings if provided
+        if (farmerId) {
+            const farmerSettings = await this.pool.query(`
+                SELECT * FROM cod_settings WHERE farmer_id = $1
+            `, [farmerId]);
+
+            if (farmerSettings.rows.length > 0) {
+                const settings = farmerSettings.rows[0];
+                if (!settings.is_enabled) {
+                    return { eligible: false, reason: 'Farmer does not accept COD' };
+                }
+                if (settings.min_order_amount && orderAmount < parseFloat(settings.min_order_amount)) {
+                    return { eligible: false, reason: `Minimum order for COD is ${settings.min_order_amount}` };
+                }
+                if (settings.max_order_amount && orderAmount > parseFloat(settings.max_order_amount)) {
+                    return { eligible: false, reason: `Maximum order for COD is ${settings.max_order_amount}` };
+                }
+            }
+        }
+
+        return { eligible: true };
+    }
 }
 

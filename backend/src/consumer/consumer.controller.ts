@@ -1,5 +1,5 @@
 
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, Request, BadRequestException, NotFoundException } from '@nestjs/common';
 import { ConsumerService } from './consumer.service';
 import { AuthGuard } from '@nestjs/passport';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -198,10 +198,94 @@ export class ConsumerController {
         return { success: true, data };
     }
 
-    // Farmer Storefront
+    // ===================== Farmer Storefront =====================
     @Get('farmers/:farmerId/storefront')
     async getFarmerStorefront(@Request() req, @Param('farmerId') farmerId: string) {
         const data = await this.consumerService.getFarmerStorefront(parseInt(farmerId), req.user.userId);
         return { success: true, data };
+    }
+
+    @Get('farmers/:farmerId/reviews')
+    async getFarmerReviews(@Request() req, @Param('farmerId') farmerId: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+        const reviews = await this.consumerService.getFarmerReviews(parseInt(farmerId), parseInt(limit || '20'), parseInt(offset || '0'));
+        return { success: true, data: reviews };
+    }
+
+    @Get('farmers/:farmerId/rating')
+    async getFarmerRating(@Param('farmerId') farmerId: string) {
+        const rating = await this.consumerService.getFarmerRating(parseInt(farmerId));
+        return { success: true, data: rating };
+    }
+
+    // ===================== Reviews =====================
+    @Post('orders/:orderId/review')
+    async createReview(@Request() req, @Param('orderId') orderId: string, @Body() body: any) {
+        const { rating, comment, product_id } = body;
+        if (!rating || rating < 1 || rating > 5) {
+            throw new BadRequestException('Rating must be between 1 and 5');
+        }
+        try {
+            const review = await this.consumerService.createReview(req.user.userId, parseInt(orderId), rating, comment, product_id);
+            return { success: true, message: 'Review submitted', data: review };
+        } catch (e) {
+            throw new BadRequestException(e.message);
+        }
+    }
+
+    @Get('orders/:orderId/review')
+    async checkOrderReview(@Request() req, @Param('orderId') orderId: string) {
+        const review = await this.consumerService.checkOrderReview(req.user.userId, parseInt(orderId));
+        return { success: true, data: review };
+    }
+
+    @Get('products/:productId/reviews')
+    async getProductReviews(@Param('productId') productId: string, @Query('limit') limit?: string, @Query('offset') offset?: string) {
+        const reviews = await this.consumerService.getProductReviews(parseInt(productId), parseInt(limit || '20'), parseInt(offset || '0'));
+        return { success: true, data: reviews };
+    }
+
+    // ===================== Notifications =====================
+    @Get('notifications')
+    async getNotifications(@Request() req, @Query('limit') limit?: string) {
+        const notifications = await this.consumerService.getNotifications(req.user.userId, parseInt(limit || '50'));
+        return { success: true, data: notifications };
+    }
+
+    @Put('notifications/:notificationId/read')
+    async markNotificationAsRead(@Request() req, @Param('notificationId') notificationId: string) {
+        const notification = await this.consumerService.markNotificationAsRead(req.user.userId, parseInt(notificationId));
+        if (!notification) throw new NotFoundException('Notification not found');
+        return { success: true, data: notification };
+    }
+
+    @Put('notifications/read-all')
+    async markAllNotificationsAsRead(@Request() req) {
+        await this.consumerService.markAllNotificationsAsRead(req.user.userId);
+        return { success: true, message: 'All notifications marked as read' };
+    }
+
+    @Get('notifications/unread-count')
+    async getUnreadCount(@Request() req) {
+        const count = await this.consumerService.getUnreadCount(req.user.userId);
+        return { success: true, data: { unread_count: count } };
+    }
+
+    // ===================== Promo Codes =====================
+    @Post('promo-codes/validate')
+    async validatePromoCode(@Body() body: any) {
+        const { code, order_amount } = body;
+        if (!code) throw new BadRequestException('Promo code is required');
+        if (!order_amount || order_amount <= 0) throw new BadRequestException('Valid order amount is required');
+        const result = await this.consumerService.validatePromoCode(code, parseFloat(order_amount));
+        return { success: true, data: result };
+    }
+
+    // ===================== COD Eligibility =====================
+    @Post('payments/cod/check-eligibility')
+    async checkCODEligibility(@Request() req, @Body() body: any) {
+        const { order_amount, farmer_id } = body;
+        if (!order_amount || order_amount <= 0) throw new BadRequestException('Valid order amount is required');
+        const result = await this.consumerService.checkCODEligibility(req.user.userId, parseFloat(order_amount), farmer_id ? parseInt(farmer_id) : undefined);
+        return { success: true, data: result };
     }
 }

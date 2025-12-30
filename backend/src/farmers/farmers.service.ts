@@ -4,14 +4,14 @@ import { Pool } from 'pg';
 
 @Injectable()
 export class FarmersService implements OnModuleInit {
-    constructor(@Inject('DATABASE_POOL') private pool: Pool) { }
+  constructor(@Inject('DATABASE_POOL') private pool: Pool) { }
 
-    async onModuleInit() {
-        await this.createVerificationTables();
-    }
+  async onModuleInit() {
+    await this.createVerificationTables();
+  }
 
-    async createVerificationTables() {
-        const query = `
+  async createVerificationTables() {
+    const query = `
       DO $$ BEGIN
         BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS latitude DECIMAL(10,7); EXCEPTION WHEN undefined_table THEN NULL; END;
         BEGIN ALTER TABLE profiles ADD COLUMN IF NOT EXISTS longitude DECIMAL(10,7); EXCEPTION WHEN undefined_table THEN NULL; END;
@@ -28,31 +28,31 @@ export class FarmersService implements OnModuleInit {
 
       CREATE INDEX IF NOT EXISTS idx_ver_docs_user ON verification_documents(user_id);
     `;
-        await this.pool.query(query);
-    }
+    await this.pool.query(query);
+  }
 
-    async getProfile(userId: number) {
-        const res = await this.pool.query(
-            `SELECT profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude
+  async getProfile(userId: number) {
+    const res = await this.pool.query(
+      `SELECT profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude
        FROM profiles WHERE user_id=$1`,
-            [userId]
-        );
-        return res.rows[0] || null;
-    }
+      [userId]
+    );
+    return res.rows[0] || null;
+  }
 
-    async updateProfile(userId: number, data: any) {
-        const {
-            full_name,
-            farm_name,
-            address,
-            bank_account_number,
-            bank_name,
-            branch_code,
-            latitude,
-            longitude,
-        } = data;
+  async updateProfile(userId: number, data: any) {
+    const {
+      full_name,
+      farm_name,
+      address,
+      bank_account_number,
+      bank_name,
+      branch_code,
+      latitude,
+      longitude,
+    } = data;
 
-        const query = `
+    const query = `
       INSERT INTO profiles (
         user_id, full_name, farm_name, address, bank_account_number,
         bank_name, branch_code, verification_status, latitude, longitude
@@ -73,37 +73,240 @@ export class FarmersService implements OnModuleInit {
         updated_at = NOW()
       RETURNING profile_id, user_id, full_name, farm_name, address, bank_account_number, bank_name, branch_code, verification_status, latitude, longitude;
     `;
-        const params = [userId, full_name || null, farm_name || null, address || null, bank_account_number || null, bank_name || null, branch_code || null, latitude || null, longitude || null];
-        const res = await this.pool.query(query, params);
+    const params = [userId, full_name || null, farm_name || null, address || null, bank_account_number || null, bank_name || null, branch_code || null, latitude || null, longitude || null];
+    const res = await this.pool.query(query, params);
 
-        // Keep status at PENDING_DOCUMENTS or update if needed logic from controller is moved here partly
-        // But original controller calls setVerificationStatus explicitly.
-        // We will follow the controller logic in the controller or a higher level method.
+    // Keep status at PENDING_DOCUMENTS or update if needed logic from controller is moved here partly
+    // But original controller calls setVerificationStatus explicitly.
+    // We will follow the controller logic in the controller or a higher level method.
 
-        return res.rows[0];
+    return res.rows[0];
+  }
+
+  async setVerificationStatus(userId: number, status: string, reason: string | null = null) {
+    const res = await this.pool.query(
+      `UPDATE profiles SET verification_status=$2, updated_at=NOW(), verification_reason=$3 WHERE user_id=$1 RETURNING verification_status`,
+      [userId, status, reason]
+    );
+    return res.rows[0];
+  }
+
+  async addDocument(userId: number, docType: string, fileData: string) {
+    const res = await this.pool.query(
+      `INSERT INTO verification_documents(user_id, doc_type, file_data) VALUES($1,$2,$3) RETURNING id, doc_type, created_at`,
+      [userId, docType, fileData || null]
+    );
+    return res.rows[0];
+  }
+
+  async listDocuments(userId: number) {
+    const res = await this.pool.query(
+      `SELECT id, doc_type, created_at FROM verification_documents WHERE user_id=$1 ORDER BY created_at DESC`,
+      [userId]
+    );
+    return res.rows;
+  }
+
+  // ===================== Farmer Orders =====================
+  async getOrders(farmerId: number, status?: string) {
+    let query = `
+            SELECT o.*, 
+                   u.email as consumer_email, u.phone as consumer_phone,
+                   p.full_name as consumer_name,
+                   ca.full_address, ca.city, ca.state, ca.postal_code,
+                   (SELECT json_agg(json_build_object(
+                       'order_item_id', oi.order_item_id,
+                       'product_id', oi.product_id,
+                       'quantity', oi.quantity,
+                       'unit_price', oi.unit_price,
+                       'subtotal', oi.subtotal,
+                       'variety_name', pr.variety_name,
+                       'rice_type', pr.rice_type
+                   )) FROM order_items oi 
+                   LEFT JOIN products pr ON oi.product_id = pr.product_id 
+                   WHERE oi.order_id = o.order_id) as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.user_id
+            LEFT JOIN profiles p ON o.user_id = p.user_id
+            LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id
+            WHERE o.farmer_id = $1
+        `;
+    const params: any[] = [farmerId];
+
+    if (status) {
+      query += ` AND o.status = $2`;
+      params.push(status);
+    }
+    query += ` ORDER BY o.created_at DESC`;
+
+    const res = await this.pool.query(query, params);
+    return res.rows;
+  }
+
+  async getOrderDetails(farmerId: number, orderId: number) {
+    const res = await this.pool.query(`
+            SELECT o.*, 
+                   u.email as consumer_email, u.phone as consumer_phone,
+                   p.full_name as consumer_name,
+                   ca.full_address, ca.city, ca.state, ca.postal_code,
+                   (SELECT json_agg(json_build_object(
+                       'order_item_id', oi.order_item_id,
+                       'product_id', oi.product_id,
+                       'quantity', oi.quantity,
+                       'unit_price', oi.unit_price,
+                       'subtotal', oi.subtotal,
+                       'variety_name', pr.variety_name,
+                       'rice_type', pr.rice_type,
+                       'images', (SELECT array_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = pr.product_id)
+                   )) FROM order_items oi 
+                   LEFT JOIN products pr ON oi.product_id = pr.product_id 
+                   WHERE oi.order_id = o.order_id) as items
+            FROM orders o
+            LEFT JOIN users u ON o.user_id = u.user_id
+            LEFT JOIN profiles p ON o.user_id = p.user_id
+            LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id
+            WHERE o.order_id = $1 AND o.farmer_id = $2
+        `, [orderId, farmerId]);
+    return res.rows[0] || null;
+  }
+
+  async acceptOrder(farmerId: number, orderId: number) {
+    const res = await this.pool.query(`
+            UPDATE orders SET status = 'ACCEPTED', updated_at = NOW()
+            WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'
+            RETURNING *
+        `, [orderId, farmerId]);
+    return res.rows[0] || null;
+  }
+
+  async rejectOrder(farmerId: number, orderId: number, reason: string, notes?: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const orderRes = await client.query(`
+                UPDATE orders SET status = 'REJECTED', updated_at = NOW()
+                WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'
+                RETURNING *
+            `, [orderId, farmerId]);
+
+      if (orderRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query(`
+                INSERT INTO order_rejections (order_id, reason, notes)
+                VALUES ($1, $2, $3)
+            `, [orderId, reason, notes || null]);
+
+      await client.query('COMMIT');
+      return orderRes.rows[0];
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async updateOrderStatus(farmerId: number, orderId: number, status: string) {
+    const validStatuses = ['ACCEPTED', 'PROCESSING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status: ${status}`);
     }
 
-    async setVerificationStatus(userId: number, status: string, reason: string | null = null) {
-        const res = await this.pool.query(
-            `UPDATE profiles SET verification_status=$2, updated_at=NOW(), verification_reason=$3 WHERE user_id=$1 RETURNING verification_status`,
-            [userId, status, reason]
-        );
-        return res.rows[0];
+    const res = await this.pool.query(`
+            UPDATE orders SET status = $3, updated_at = NOW()
+            WHERE order_id = $1 AND farmer_id = $2
+            RETURNING *
+        `, [orderId, farmerId, status]);
+    return res.rows[0] || null;
+  }
+
+  // ===================== Farmer Ledger =====================
+  async getLedger(farmerId: number) {
+    const res = await this.pool.query(`
+            SELECT fl.*, o.order_id, o.total_amount as order_total
+            FROM farmer_ledger fl
+            LEFT JOIN orders o ON fl.order_id = o.order_id
+            WHERE fl.farmer_id = $1
+            ORDER BY fl.created_at DESC
+        `, [farmerId]);
+    return res.rows;
+  }
+
+  // ===================== Farmer Payouts =====================
+  async getPayouts(farmerId: number) {
+    const res = await this.pool.query(`
+            SELECT * FROM farmer_payouts
+            WHERE farmer_id = $1
+            ORDER BY created_at DESC
+        `, [farmerId]);
+    return res.rows;
+  }
+
+  async requestPayout(farmerId: number, amount: number, bankDetails: any) {
+    // Get current balance from ledger
+    const balanceRes = await this.pool.query(`
+            SELECT COALESCE(
+                (SELECT balance_after FROM farmer_ledger WHERE farmer_id = $1 ORDER BY created_at DESC LIMIT 1),
+                0
+            ) as current_balance
+        `, [farmerId]);
+    const currentBalance = parseFloat(balanceRes.rows[0]?.current_balance || 0);
+
+    if (amount > currentBalance) {
+      throw new Error('Insufficient balance for payout');
     }
 
-    async addDocument(userId: number, docType: string, fileData: string) {
-        const res = await this.pool.query(
-            `INSERT INTO verification_documents(user_id, doc_type, file_data) VALUES($1,$2,$3) RETURNING id, doc_type, created_at`,
-            [userId, docType, fileData || null]
-        );
-        return res.rows[0];
-    }
+    // Get commission rate
+    const commissionRes = await this.pool.query(`
+            SELECT commission_rate, min_commission FROM commission_settings ORDER BY setting_id DESC LIMIT 1
+        `);
+    const commissionRate = parseFloat(commissionRes.rows[0]?.commission_rate || 0.05);
+    const minCommission = parseFloat(commissionRes.rows[0]?.min_commission || 0);
 
-    async listDocuments(userId: number) {
-        const res = await this.pool.query(
-            `SELECT id, doc_type, created_at FROM verification_documents WHERE user_id=$1 ORDER BY created_at DESC`,
-            [userId]
-        );
-        return res.rows;
-    }
+    const commissionAmount = Math.max(amount * commissionRate, minCommission);
+    const netAmount = amount - commissionAmount;
+
+    const today = new Date();
+    const periodStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const periodEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    const res = await this.pool.query(`
+            INSERT INTO farmer_payouts (
+                farmer_id, payout_period_start, payout_period_end,
+                total_earnings, commission_amount, net_amount,
+                status, bank_account_number, bank_name, branch_code
+            ) VALUES ($1, $2, $3, $4, $5, $6, 'PENDING', $7, $8, $9)
+            RETURNING *
+        `, [
+      farmerId, periodStart, periodEnd,
+      amount, commissionAmount, netAmount,
+      bankDetails?.bank_account_number || null,
+      bankDetails?.bank_name || null,
+      bankDetails?.branch_code || null
+    ]);
+
+    return res.rows[0];
+  }
+
+  // ===================== Farmer Reviews =====================
+  async getReviews(farmerId: number, limit = 50, offset = 0) {
+    const res = await this.pool.query(`
+            SELECT r.*, 
+                   u.email as consumer_email,
+                   p.full_name as consumer_name,
+                   pr.variety_name as product_name
+            FROM reviews r
+            LEFT JOIN users u ON r.consumer_id = u.user_id
+            LEFT JOIN profiles p ON r.consumer_id = p.user_id
+            LEFT JOIN products pr ON r.product_id = pr.product_id
+            WHERE r.farmer_id = $1
+            ORDER BY r.created_at DESC
+            LIMIT $2 OFFSET $3
+        `, [farmerId, limit, offset]);
+    return res.rows;
+  }
 }
