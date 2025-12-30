@@ -197,4 +197,11 @@ export class ConsumerController {
         const data = await this.consumerService.getHomepageData(req.user.userId);
         return { success: true, data };
     }
+
+    // Farmer Storefront
+    @Get('farmers/:farmerId/storefront')
+    async getFarmerStorefront(@Request() req, @Param('farmerId') farmerId: string) {
+        const data = await this.consumerService.getFarmerStorefront(parseInt(farmerId), req.user.userId);
+        return { success: true, data };
+    }
 }

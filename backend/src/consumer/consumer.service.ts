@@ -411,5 +411,52 @@ export class ConsumerService implements OnModuleInit {
             new_arrivals: new_arrivals
         };
     }
+
+    // Farmer Storefront
+    async getFarmerStorefront(farmerId: number, userId: number) {
+        // Get farmer profile
+        const farmerRes = await this.pool.query(
+            `SELECT u.user_id as farmer_id, u.email, pr.full_name, pr.farm_name, pr.address,
+             (SELECT AVG(r.rating) FROM reviews r WHERE r.farmer_id = u.user_id) as average_rating,
+             (SELECT COUNT(*) FROM reviews r WHERE r.farmer_id = u.user_id) as total_reviews
+             FROM users u
+             LEFT JOIN profiles pr ON u.user_id = pr.user_id
+             WHERE u.user_id = $1 AND u.role = 'FARMER'`,
+            [farmerId]
+        );
+
+        if (farmerRes.rows.length === 0) {
+            throw new NotFoundException('Farmer not found');
+        }
+
+        const farmer = farmerRes.rows[0];
+
+        // Get farmer's active products
+        const productsRes = await this.pool.query(
+            `SELECT p.*, 
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite
+             FROM products p
+             WHERE p.farmer_id = $1 AND p.status = 'ACTIVE'
+             ORDER BY p.created_at DESC`,
+            [farmerId, userId]
+        );
+
+        const products = productsRes.rows.map(row => ({
+            ...row,
+            images: row.images || [],
+            is_favorite: row.is_favorite
+        }));
+
+        return {
+            farmer: {
+                ...farmer,
+                average_rating: farmer.average_rating ? parseFloat(farmer.average_rating) : null,
+                total_reviews: parseInt(farmer.total_reviews) || 0
+            },
+            products: products,
+            product_count: products.length
+        };
+    }
 }
 
