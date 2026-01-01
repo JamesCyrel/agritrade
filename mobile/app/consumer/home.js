@@ -77,10 +77,10 @@ export default function ConsumerHomeScreen() {
     try {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.toggleFavorite(token, productId);
-      if (res.success) {
+      if (res.success && res.data) {
         // Update local state to reflect change
         setHomepageData(prev => {
-          const updateProduct = (p) => p.product_id === productId ? { ...p, is_favorite: res.isFavorite } : p;
+          const updateProduct = (p) => p.product_id === productId ? { ...p, is_favorite: res.data.isFavorite } : p;
           return {
             featured_farmers: prev.featured_farmers,
             popular_varieties: prev.popular_varieties.map(updateProduct),

@@ -55,8 +55,8 @@ export default function ProductDetailScreen() {
     try {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.checkFavorite(token, productId);
-      if (res.success) {
-        setIsFavorite(res.isFavorite);
+      if (res.success && res.data) {
+        setIsFavorite(res.data.isFavorite);
       }
     } catch (error) {
       console.error("Check favorite error:", error);
@@ -68,8 +68,8 @@ export default function ProductDetailScreen() {
       setTogglingFavorite(true);
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.toggleFavorite(token, productId);
-      if (res.success) {
-        setIsFavorite(res.isFavorite);
+      if (res.success && res.data) {
+        setIsFavorite(res.data.isFavorite);
       } else {
         Alert.alert("Error", res.message || "Failed to update favorite");
       }
@@ -132,9 +132,8 @@ export default function ProductDetailScreen() {
       setAddingToCart(true);
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.addToCart(token, {
-        productId: product.product_id,
+        product_id: product.product_id,
         quantity: parseFloat(quantity),
-        sackSizeKg: selectedSackSize ? parseFloat(selectedSackSize) : null,
       });
 
       if (res.success) {
@@ -419,7 +418,7 @@ const styles = StyleSheet.create({
   loadingContainer: { alignItems: "center", justifyContent: "center" },
   productImage: {
     width: width,
-    height: width,
+    height: width * 0.75,
     backgroundColor: "#f0f0f0",
     justifyContent: "center",
     alignItems: "center",
