@@ -132,7 +132,7 @@ export default function ConsumerHomeScreen() {
           {String(product.variety_name || "Unknown Variety")}
         </Text>
         <Text style={styles.cardFarmName} numberOfLines={1}>
-          {String(product.farm_name || "Unknown Farm")}
+          {String(product.farm_name || product.farmer_name || "Unknown Farm")}
         </Text>
         <Text style={styles.cardPrice}>₱{price}/kg</Text>
         {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (

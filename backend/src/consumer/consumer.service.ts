@@ -209,7 +209,7 @@ export class ConsumerService implements OnModuleInit {
     async getCart(userId: number) {
         const res = await this.pool.query(
             `SELECT ci.*, ci.sack_size_kg, p.variety_name, p.rice_type, p.price_per_kg, p.quantity_unit as unit, 
-             pr.farm_name, u.email as farmer_email,
+             pr.farm_name, pr.full_name as farmer_name, u.email as farmer_email,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
              COALESCE((SELECT ps.price FROM product_sack_sizes ps WHERE ps.product_id = p.product_id AND ps.size_kg = ci.sack_size_kg), p.price_per_kg) as unit_price
              FROM cart_items ci 

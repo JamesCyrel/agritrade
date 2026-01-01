@@ -196,7 +196,7 @@ export default function SearchScreen() {
 
                   <View style={styles.productDetails}>
                     <Text style={styles.productName}>{product.variety_name}</Text>
-                    <Text style={styles.productFarm}>{product.farm_name}</Text>
+                    <Text style={styles.productFarm}>{product.farm_name || product.farmer_name || "Unknown Farm"}</Text>
                     <Text style={styles.productPrice}>₱{product.price_per_kg}/kg</Text>
                     <Text style={styles.productType}>{product.rice_type}</Text>
                     {product.distance_km && (

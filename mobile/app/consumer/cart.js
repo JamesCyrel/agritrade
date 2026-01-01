@@ -152,7 +152,7 @@ export default function ConsumerCartScreen() {
                 )}
                 <View style={styles.itemDetails}>
                   <Text style={styles.itemName}>{item.variety_name}</Text>
-                  <Text style={styles.itemFarm}>{item.farm_name}</Text>
+                  <Text style={styles.itemFarm}>{item.farm_name || item.farmer_name || "Unknown Farm"}</Text>
                   <Text style={styles.itemPrice}>
                     ₱{item.unit_price} {item.sack_size_kg ? `per ${item.sack_size_kg}kg sack` : "per kg"}
                   </Text>

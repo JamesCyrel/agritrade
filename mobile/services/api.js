@@ -28,11 +28,15 @@ if (__DEV__) {
 }
 
 // Helper function to get full image URL
-// Handles both relative paths (like /assets/rice/rice1.jpg) and full URLs
+// Handles both relative paths (like /assets/rice/rice1.jpg), full URLs, and base64 data URIs
 export const getImageUrl = (imagePath) => {
   if (!imagePath) return null;
   // If it's already a full URL, return as is
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+    return imagePath;
+  }
+  // If it's a base64 data URI, return as is
+  if (imagePath.startsWith('data:')) {
     return imagePath;
   }
   // Otherwise, prepend the server URL
