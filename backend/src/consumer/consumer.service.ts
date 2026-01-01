@@ -11,18 +11,7 @@ export class ConsumerService implements OnModuleInit {
     }
 
     async createTables() {
-        // Drop and recreate these tables to ensure correct schema
-        const dropTables = [
-            `DROP TABLE IF EXISTS order_items CASCADE`,
-            `DROP TABLE IF EXISTS orders CASCADE`,
-            `DROP TABLE IF EXISTS cart_items CASCADE`,
-            `DROP TABLE IF EXISTS favorites CASCADE`
-        ];
-
-        for (const sql of dropTables) {
-            try { await this.pool.query(sql); } catch (e) { /* ignore */ }
-        }
-
+        // Create tables if they don't exist (preserves existing data)
         const tables = [
             `CREATE TABLE IF NOT EXISTS consumer_addresses (
                 address_id SERIAL PRIMARY KEY,

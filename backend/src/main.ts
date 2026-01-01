@@ -7,11 +7,12 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Serve static files from public directory
-  app.useStaticAssets(join(__dirname, '..', 'public'), {
+  // Use process.cwd() to get project root (works in both dev and prod)
+  app.useStaticAssets(join(process.cwd(), 'public'), {
     prefix: '/',
   });
   // Also serve /assets path specifically
-  app.useStaticAssets(join(__dirname, '..', 'public', 'assets'), {
+  app.useStaticAssets(join(process.cwd(), 'public', 'assets'), {
     prefix: '/assets/',
   });
 
