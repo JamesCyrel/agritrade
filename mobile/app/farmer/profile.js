@@ -31,6 +31,7 @@ export default function FarmerProfileScreen() {
   const [productCount, setProductCount] = useState(0);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [reviewsCount, setReviewsCount] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
 
   // Setup fields
   const [fullName, setFullName] = useState("");
@@ -233,7 +234,62 @@ export default function FarmerProfileScreen() {
             <Text style={styles.name}>{profile.farm_name || 'Farm Name'}</Text>
             <Text style={styles.email}>{profile.full_name || ''}</Text>
             <Text style={styles.role}>Farmer</Text>
+            <TouchableOpacity style={styles.editProfileButton} onPress={() => setIsEditing(!isEditing)}>
+              <Text style={styles.editProfileButtonText}>{isEditing ? 'Cancel Edit' : 'Edit Profile'}</Text>
+            </TouchableOpacity>
           </View>
+
+          {isEditing && (
+            <View style={styles.editSection}>
+              <Text style={styles.sectionTitle}>Edit Profile</Text>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput style={styles.input} value={fullName} onChangeText={setFullName} placeholder="Your full name" />
+              <Text style={styles.label}>Farm Name</Text>
+              <TextInput style={styles.input} value={farmName} onChangeText={setFarmName} placeholder="e.g., Green Valley Farm" />
+              <Text style={styles.label}>Operational Address</Text>
+              <TextInput style={[styles.input, styles.multiline]} value={address} onChangeText={setAddress} placeholder="Full address" multiline numberOfLines={3} />
+              <Text style={styles.label}>Account Number</Text>
+              <TextInput style={styles.input} value={bankAccountNumber} onChangeText={setBankAccountNumber} placeholder="Account Number" keyboardType="number-pad" />
+              <Text style={styles.label}>Bank Name</Text>
+              <TextInput style={styles.input} value={bankName} onChangeText={setBankName} placeholder="Bank Name" />
+              <Text style={styles.label}>Branch Code</Text>
+              <TextInput style={styles.input} value={branchCode} onChangeText={setBranchCode} placeholder="Branch Code" />
+              <TouchableOpacity style={styles.saveButton} onPress={async () => {
+                if (!farmName || !address || !bankAccountNumber || !bankName || !branchCode) {
+                  Alert.alert('Missing fields', 'Please fill all required fields.');
+                  return;
+                }
+                try {
+                  setSaving(true);
+                  const token = await AsyncStorage.getItem('authToken');
+                  const res = await farmerAPI.updateProfile(token, {
+                    full_name: fullName,
+                    farm_name: farmName,
+                    address,
+                    bank_account_number: bankAccountNumber,
+                    bank_name: bankName,
+                    branch_code: branchCode,
+                    latitude: coords.lat,
+                    longitude: coords.lon,
+                  });
+                  if (res.success) {
+                    Alert.alert('Saved', 'Profile updated successfully.');
+                    await load();
+                    setIsEditing(false);
+                  } else {
+                    Alert.alert('Error', res.message || 'Failed to save profile');
+                  }
+                } catch (e) {
+                  Alert.alert('Error', e.message || 'Failed to save profile');
+                } finally {
+                  setSaving(false);
+                }
+              }} disabled={saving}>
+                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveText}>Save Changes</Text>}
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={styles.menuSection}>
             <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/farmer/products')}>
               <Package size={24} color="#333" style={{ marginRight: 16 }} />
@@ -292,6 +348,9 @@ const styles = StyleSheet.create({
   name: { fontSize: 20, fontWeight: "bold", color: "#333", marginBottom: 4 },
   email: { fontSize: 14, color: "#666", marginBottom: 8 },
   role: { fontSize: 12, color: "#2d5016", fontWeight: "600", backgroundColor: "#e8f5e9", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, marginBottom: 8 },
+  editProfileButton: { marginTop: 12, backgroundColor: "#f0f0f0", borderRadius: 8, paddingVertical: 10, paddingHorizontal: 20, borderWidth: 1, borderColor: "#2d5016" },
+  editProfileButtonText: { color: "#2d5016", fontSize: 14, fontWeight: "600" },
+  editSection: { backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 16 },
   statusCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#2d5016' },
   statusLabel: { fontSize: 12, color: '#666' },
   statusValue: { fontSize: 16, fontWeight: '600', color: '#333', marginTop: 4 },
