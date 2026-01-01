@@ -99,6 +99,13 @@ export default function OrderDetailScreen() {
   };
 
   const handleCancelOrder = () => {
+    console.log('handleCancelOrder called for orderId:', orderId);
+    if (!orderId) {
+      console.error('No order ID provided');
+      Alert.alert("Error", "Unable to cancel order - invalid ID");
+      return;
+    }
+    
     Alert.alert(
       "Cancel Order",
       "Are you sure you want to cancel this order? This action cannot be undone.",
@@ -112,9 +119,11 @@ export default function OrderDetailScreen() {
           style: "destructive",
           onPress: async () => {
             try {
+              console.log('Cancelling order:', orderId);
               setCancelling(true);
               const token = await AsyncStorage.getItem("authToken");
               const res = await consumerAPI.cancelOrder(token, orderId);
+              console.log('Cancel order response:', res);
               
               if (res.success) {
                 Alert.alert("Success", "Order cancelled successfully", [
@@ -169,8 +178,8 @@ export default function OrderDetailScreen() {
         {/* Order Items */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Items</Text>
-          {order.items && order.items.map((item) => (
-            <View key={item.order_item_id} style={styles.orderItem}>
+          {order.items && order.items.filter(item => item && item.product_id).map((item, index) => (
+            <View key={item.order_item_id || `item-${index}`} style={styles.orderItem}>
               <View style={styles.orderItemImage}>
                 {item.images && item.images.length > 0 ? (
                   <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
@@ -179,12 +188,12 @@ export default function OrderDetailScreen() {
                 )}
               </View>
               <View style={styles.orderItemDetails}>
-                <Text style={styles.orderItemName}>{item.variety_name}</Text>
-                <Text style={styles.orderItemType}>{item.rice_type}</Text>
+                <Text style={styles.orderItemName}>{item.variety_name || item.name || 'Rice Product'}</Text>
+                <Text style={styles.orderItemType}>{item.rice_type || ''}</Text>
                 <Text style={styles.orderItemQuantity}>
-                  {item.quantity} {item.sack_size_kg ? `× ${item.sack_size_kg}kg sacks` : "kg"} @ ₱{item.unit_price}
+                  {item.quantity} {item.sack_size_kg ? `× ${item.sack_size_kg}kg sacks` : "kg"} @ ₱{parseFloat(item.unit_price || 0).toFixed(2)}
                 </Text>
-                <Text style={styles.orderItemTotal}>₱{parseFloat(item.subtotal).toFixed(2)}</Text>
+                <Text style={styles.orderItemTotal}>₱{parseFloat(item.subtotal || 0).toFixed(2)}</Text>
               </View>
             </View>
           ))}
@@ -232,13 +241,13 @@ export default function OrderDetailScreen() {
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Subtotal</Text>
-              <Text style={styles.summaryValue}>₱{parseFloat(order.subtotal).toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₱{parseFloat(order.subtotal || order.total_amount || 0).toFixed(2)}</Text>
             </View>
-            {order.discount_amount > 0 && (
+            {parseFloat(order.discount_amount || 0) > 0 && (
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Discount</Text>
                 <Text style={[styles.summaryValue, styles.discountValue]}>
-                  -₱{parseFloat(order.discount_amount).toFixed(2)}
+                  -₱{parseFloat(order.discount_amount || 0).toFixed(2)}
                 </Text>
               </View>
             )}
@@ -250,15 +259,15 @@ export default function OrderDetailScreen() {
             )}
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Delivery Fee</Text>
-              <Text style={styles.summaryValue}>₱{parseFloat(order.delivery_fee).toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₱{parseFloat(order.delivery_fee || 0).toFixed(2)}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Tax</Text>
-              <Text style={styles.summaryValue}>₱{parseFloat(order.tax).toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>₱{parseFloat(order.tax || 0).toFixed(2)}</Text>
             </View>
             <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total</Text>
-              <Text style={styles.totalValue}>₱{parseFloat(order.total_amount).toFixed(2)}</Text>
+              <Text style={styles.totalValue}>₱{parseFloat(order.total_amount || 0).toFixed(2)}</Text>
             </View>
           </View>
         </View>

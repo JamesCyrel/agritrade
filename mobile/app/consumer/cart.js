@@ -71,6 +71,13 @@ export default function ConsumerCartScreen() {
   };
 
   const handleRemoveItem = async (cartItemId) => {
+    console.log('handleRemoveItem called with cartItemId:', cartItemId);
+    if (!cartItemId) {
+      console.error('No cart item ID provided');
+      Alert.alert("Error", "Unable to remove item - invalid ID");
+      return;
+    }
+    
     Alert.alert("Remove Item", "Remove this item from cart?", [
       { text: "Cancel", style: "cancel" },
       {
@@ -78,8 +85,10 @@ export default function ConsumerCartScreen() {
         style: "destructive",
         onPress: async () => {
           try {
+            console.log('Removing cart item:', cartItemId);
             const token = await AsyncStorage.getItem("authToken");
             const res = await consumerAPI.removeCartItem(token, cartItemId);
+            console.log('Remove cart item response:', res);
             if (res.success) {
               await loadCart();
             } else {

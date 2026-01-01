@@ -288,9 +288,15 @@ export class ConsumerService implements OnModuleInit {
     // Orders
     async getOrders(userId: number) {
         const res = await this.pool.query(
-            `SELECT o.*, json_agg(json_build_object('product_id', oi.product_id, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'name', p.variety_name)) as items
-             FROM orders o LEFT JOIN order_items oi ON o.order_id = oi.order_id LEFT JOIN products p ON oi.product_id = p.product_id
-             WHERE o.user_id = $1 GROUP BY o.order_id ORDER BY o.created_at DESC`,
+            `SELECT o.*, pr.farm_name, pr.full_name as farmer_name,
+             COALESCE(json_agg(
+                json_build_object('product_id', oi.product_id, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'name', p.variety_name)
+             ) FILTER (WHERE oi.order_item_id IS NOT NULL), '[]') as items
+             FROM orders o 
+             LEFT JOIN order_items oi ON o.order_id = oi.order_id 
+             LEFT JOIN products p ON oi.product_id = p.product_id
+             LEFT JOIN profiles pr ON o.farmer_id = pr.user_id
+             WHERE o.user_id = $1 GROUP BY o.order_id, pr.farm_name, pr.full_name ORDER BY o.created_at DESC`,
             [userId]
         );
         return res.rows;
@@ -351,14 +357,40 @@ export class ConsumerService implements OnModuleInit {
 
     async getOrderDetails(userId: number, orderId: number) {
         const res = await this.pool.query(
-            `SELECT o.*, ca.full_address, ca.city, ca.state, ca.postal_code,
-             json_agg(json_build_object('product_id', oi.product_id, 'quantity', oi.quantity, 'unit_price', oi.unit_price, 'subtotal', oi.subtotal, 'name', p.variety_name)) as items
-             FROM orders o LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id LEFT JOIN order_items oi ON o.order_id = oi.order_id LEFT JOIN products p ON oi.product_id = p.product_id
-             WHERE o.order_id = $1 AND o.user_id = $2 GROUP BY o.order_id, ca.full_address, ca.city, ca.state, ca.postal_code`,
+            `SELECT o.*, ca.full_address as delivery_address, ca.city, ca.state, ca.postal_code,
+             pr.farm_name, pr.full_name as farmer_name,
+             COALESCE(json_agg(
+                json_build_object(
+                    'order_item_id', oi.order_item_id,
+                    'product_id', oi.product_id, 
+                    'quantity', oi.quantity, 
+                    'unit_price', oi.unit_price, 
+                    'subtotal', oi.subtotal,
+                    'sack_size_kg', oi.sack_size_kg,
+                    'variety_name', p.variety_name,
+                    'rice_type', p.rice_type
+                )
+             ) FILTER (WHERE oi.order_item_id IS NOT NULL), '[]') as items
+             FROM orders o 
+             LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id 
+             LEFT JOIN order_items oi ON o.order_id = oi.order_id 
+             LEFT JOIN products p ON oi.product_id = p.product_id
+             LEFT JOIN profiles pr ON o.farmer_id = pr.user_id
+             WHERE o.order_id = $1 AND o.user_id = $2 
+             GROUP BY o.order_id, ca.full_address, ca.city, ca.state, ca.postal_code, pr.farm_name, pr.full_name`,
             [orderId, userId]
         );
         if (res.rowCount === 0) throw new NotFoundException('Order not found');
-        return res.rows[0];
+        
+        // Add default values for fields that might be missing
+        const order = res.rows[0];
+        return {
+            ...order,
+            subtotal: order.subtotal || order.total_amount,
+            delivery_fee: order.delivery_fee || 0,
+            tax: order.tax || 0,
+            discount_amount: order.discount_amount || 0
+        };
     }
 
     async cancelOrder(userId: number, orderId: number) {
