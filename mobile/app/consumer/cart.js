@@ -165,7 +165,7 @@ export default function ConsumerCartScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  <Text style={styles.itemTotal}>₱{item.item_total.toFixed(2)}</Text>
+                  <Text style={styles.itemTotal}>₱{parseFloat(item.item_total || 0).toFixed(2)}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.removeButton}
@@ -179,7 +179,7 @@ export default function ConsumerCartScreen() {
             <View style={styles.summary}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Subtotal</Text>
-                <Text style={styles.summaryValue}>₱{cartData.subtotal.toFixed(2)}</Text>
+                <Text style={styles.summaryValue}>₱{parseFloat(cartData.subtotal || 0).toFixed(2)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Delivery Fee</Text>

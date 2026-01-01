@@ -94,20 +94,27 @@ export class ConsumerService implements OnModuleInit {
 
         // Migrations: Add sack_size_kg column and update unique constraint if not exists
         const migrations = [
-            // Add sack_size_kg column if not exists
+            // Add sack_size_kg column to cart_items if not exists
             `ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS sack_size_kg INTEGER DEFAULT NULL`,
-            // Drop old unique constraint if exists and create new one
+            // Add sack_size_kg column to order_items if not exists
+            `ALTER TABLE order_items ADD COLUMN IF NOT EXISTS sack_size_kg INTEGER DEFAULT NULL`,
+            // Drop old unique constraint if exists
             `DO $$ BEGIN
                 IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cart_items_user_id_product_id_key') THEN
                     ALTER TABLE cart_items DROP CONSTRAINT cart_items_user_id_product_id_key;
                 END IF;
             END $$`,
-            // Create new unique constraint with sack_size_kg (if not exists)
+            // Drop old constraint with sack_size_kg if exists (from previous migration)
             `DO $$ BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cart_items_user_id_product_id_sack_size_kg_key') THEN
-                    ALTER TABLE cart_items ADD CONSTRAINT cart_items_user_id_product_id_sack_size_kg_key UNIQUE (user_id, product_id, sack_size_kg);
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cart_items_user_id_product_id_sack_size_kg_key') THEN
+                    ALTER TABLE cart_items DROP CONSTRAINT cart_items_user_id_product_id_sack_size_kg_key;
                 END IF;
-            END $$`
+            END $$`,
+            // Drop old unique index if exists
+            `DROP INDEX IF EXISTS cart_items_user_product_sack_unique`,
+            // Create unique index that treats NULL as 0 (allowing multiple different products)
+            `CREATE UNIQUE INDEX IF NOT EXISTS cart_items_user_product_sack_unique 
+             ON cart_items (user_id, product_id, COALESCE(sack_size_kg, 0))`
         ];
 
         for (const sql of migrations) {
@@ -230,12 +237,34 @@ export class ConsumerService implements OnModuleInit {
             throw new NotFoundException(`Invalid sack size. Valid options are: ${validSackSizes.join(', ')} kg`);
         }
         
-        const res = await this.pool.query(
-            `INSERT INTO cart_items (user_id, product_id, quantity, sack_size_kg) VALUES ($1, $2, $3, $4)
-             ON CONFLICT (user_id, product_id, sack_size_kg) DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW() RETURNING *`,
-            [userId, product_id, quantity || 1, sack_size_kg || null]
+        // Use upsert logic manually since we have a unique index with COALESCE
+        const sackValue = sack_size_kg || null;
+        
+        // Check if item already exists
+        const existing = await this.pool.query(
+            `SELECT cart_item_id, quantity FROM cart_items 
+             WHERE user_id = $1 AND product_id = $2 AND COALESCE(sack_size_kg, 0) = COALESCE($3, 0)`,
+            [userId, product_id, sackValue]
         );
-        return res.rows[0];
+        
+        if (existing.rows.length > 0) {
+            // Update existing item
+            const newQuantity = existing.rows[0].quantity + (quantity || 1);
+            const res = await this.pool.query(
+                `UPDATE cart_items SET quantity = $1, updated_at = NOW() 
+                 WHERE cart_item_id = $2 RETURNING *`,
+                [newQuantity, existing.rows[0].cart_item_id]
+            );
+            return res.rows[0];
+        } else {
+            // Insert new item
+            const res = await this.pool.query(
+                `INSERT INTO cart_items (user_id, product_id, quantity, sack_size_kg) 
+                 VALUES ($1, $2, $3, $4) RETURNING *`,
+                [userId, product_id, quantity || 1, sackValue]
+            );
+            return res.rows[0];
+        }
     }
 
     async updateCartItem(userId: number, cartItemId: number, quantity: number) {
@@ -273,23 +302,46 @@ export class ConsumerService implements OnModuleInit {
         try {
             await client.query('BEGIN');
             let totalAmount = 0, farmerId = null;
+            
+            // Calculate prices - handle both kg and sack purchases
+            const itemsWithPrices: any[] = [];
             for (const item of items) {
                 const productRes = await client.query(`SELECT price_per_kg, farmer_id FROM products WHERE product_id = $1`, [item.product_id]);
                 if (productRes.rows.length === 0) throw new NotFoundException(`Product ${item.product_id} not found`);
-                totalAmount += productRes.rows[0].price_per_kg * item.quantity;
+                
+                let unitPrice = parseFloat(productRes.rows[0].price_per_kg);
+                
+                // If sack_size_kg is specified, get the sack price
+                if (item.sack_size_kg) {
+                    const sackRes = await client.query(
+                        `SELECT price FROM product_sack_sizes WHERE product_id = $1 AND size_kg = $2`,
+                        [item.product_id, item.sack_size_kg]
+                    );
+                    if (sackRes.rows.length > 0) {
+                        unitPrice = parseFloat(sackRes.rows[0].price);
+                    }
+                }
+                
+                const subtotal = unitPrice * item.quantity;
+                totalAmount += subtotal;
                 farmerId = productRes.rows[0].farmer_id;
+                itemsWithPrices.push({ ...item, unitPrice, subtotal });
             }
+            
             const orderRes = await client.query(
                 `INSERT INTO orders (user_id, farmer_id, address_id, total_amount, payment_method, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
                 [userId, farmerId, address_id, totalAmount, payment_method, notes]
             );
             const order = orderRes.rows[0];
-            for (const item of items) {
-                const productRes = await client.query(`SELECT price_per_kg FROM products WHERE product_id = $1`, [item.product_id]);
-                const price = productRes.rows[0].price_per_kg;
-                await client.query(`INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)`,
-                    [order.order_id, item.product_id, item.quantity, price, price * item.quantity]);
+            
+            // Insert order items with correct prices
+            for (const item of itemsWithPrices) {
+                await client.query(
+                    `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, sack_size_kg) VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [order.order_id, item.product_id, item.quantity, item.unitPrice, item.subtotal, item.sack_size_kg || null]
+                );
             }
+            
             await client.query(`DELETE FROM cart_items WHERE user_id = $1`, [userId]);
             await client.query('COMMIT');
             return order;

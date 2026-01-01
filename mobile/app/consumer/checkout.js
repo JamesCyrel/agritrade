@@ -189,16 +189,29 @@ export default function CheckoutScreen() {
     try {
       setPlacingOrder(true);
       const token = await AsyncStorage.getItem("authToken");
+      
+      // Build items array from cart data
+      const items = cartData.items.map(item => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        sack_size_kg: item.sack_size_kg || null
+      }));
+      
       const orderData = {
-        deliveryAddressId: selectedAddressId,
-        paymentType: isCOD ? 'COD' : 'DIGITAL',
-        promoCode: appliedPromo?.code || null,
+        address_id: selectedAddressId,
+        payment_method: isCOD ? 'COD' : 'DIGITAL',
+        items: items,
         notes: notes.trim() || null,
       };
       
       // Only include paymentMethodId for digital payments
       if (!isCOD) {
-        orderData.paymentMethodId = selectedPaymentId;
+        orderData.payment_method_id = selectedPaymentId;
+      }
+      
+      // Include promo code if applied
+      if (appliedPromo?.code) {
+        orderData.promo_code = appliedPromo.code;
       }
       
       const res = await consumerAPI.createOrder(token, orderData);
@@ -324,7 +337,7 @@ export default function CheckoutScreen() {
                 <Text style={styles.summaryItemDetails}>
                   {item.quantity} {item.sack_size_kg ? `× ${item.sack_size_kg}kg sacks` : "kg"} @ ₱{item.unit_price}
                 </Text>
-                <Text style={styles.summaryItemTotal}>₱{item.item_total.toFixed(2)}</Text>
+                <Text style={styles.summaryItemTotal}>₱{parseFloat(item.item_total || 0).toFixed(2)}</Text>
               </View>
             ))}
 
@@ -374,7 +387,7 @@ export default function CheckoutScreen() {
             <View style={styles.priceBreakdown}>
               <View style={styles.priceRow}>
                 <Text style={styles.priceLabel}>Subtotal</Text>
-                <Text style={styles.priceValue}>₱{cartData.subtotal.toFixed(2)}</Text>
+                <Text style={styles.priceValue}>₱{parseFloat(cartData.subtotal || 0).toFixed(2)}</Text>
               </View>
               {appliedPromo && (
                 <View style={styles.priceRow}>
