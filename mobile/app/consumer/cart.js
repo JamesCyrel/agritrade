@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { consumerAPI } from "../../services/api";
+import { consumerAPI, getImageUrl } from "../../services/api";
 import { Wheat, X } from "lucide-react-native";
 
 export default function ConsumerCartScreen() {
@@ -135,7 +135,7 @@ export default function ConsumerCartScreen() {
             {cartData.items.map((item) => (
               <View key={item.cart_item_id} style={styles.cartItem}>
                 {item.images && item.images.length > 0 ? (
-                  <Image source={{ uri: item.images[0] }} style={styles.itemImage} />
+                  <Image source={{ uri: getImageUrl(item.images[0]) }} style={styles.itemImage} />
                 ) : (
                   <View style={styles.itemImage}>
                     <Wheat size={40} color="#ccc" />

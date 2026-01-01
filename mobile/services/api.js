@@ -309,7 +309,7 @@ export const consumerAPI = {
   },
   // Payment System (PS-2)
   checkCODEligibility: async (token, orderAmount, farmerId = null) => {
-    return await apiCall('/consumer/payments/cod/check-eligibility', 'POST', { orderAmount, farmerId }, token);
+    return await apiCall('/consumer/payments/cod/check-eligibility', 'POST', { order_amount: orderAmount, farmer_id: farmerId }, token);
   },
   // Notifications (OM-6)
   getNotifications: async (token, limit = 50) => {

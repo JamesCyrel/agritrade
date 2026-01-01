@@ -84,14 +84,15 @@ export class ConsumerController {
     @Get('cart')
     async getCart(@Request() req) {
         const items = await this.consumerService.getCart(req.user.userId);
-        const subtotal = items.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity), 0);
+        const subtotal = items.reduce((sum, item) => sum + item.item_total, 0);
         return {
             success: true,
             data: {
                 items: items.map(item => ({
                     ...item,
-                    unit_price: parseFloat(item.price),
-                    item_total: parseFloat(item.price) * item.quantity
+                    unit_price: item.sack_size_kg 
+                        ? parseFloat(item.unit_price)  // sack price from product_sack_sizes
+                        : parseFloat(item.price_per_kg) // kg price
                 })),
                 subtotal,
                 item_count: items.length

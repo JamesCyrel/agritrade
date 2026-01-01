@@ -134,6 +134,7 @@ export default function ProductDetailScreen() {
       const res = await consumerAPI.addToCart(token, {
         product_id: product.product_id,
         quantity: parseFloat(quantity),
+        sack_size_kg: selectedSackSize, // null for kg purchase, or 10/25/50 for sack purchase
       });
 
       if (res.success) {

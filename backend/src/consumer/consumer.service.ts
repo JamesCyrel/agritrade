@@ -42,9 +42,10 @@ export class ConsumerService implements OnModuleInit {
                 user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
                 product_id INTEGER REFERENCES products(product_id) ON DELETE CASCADE,
                 quantity INTEGER NOT NULL DEFAULT 1,
+                sack_size_kg INTEGER DEFAULT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(user_id, product_id)
+                UNIQUE(user_id, product_id, sack_size_kg)
             )`,
             `CREATE TABLE IF NOT EXISTS orders (
                 order_id SERIAL PRIMARY KEY,
@@ -90,6 +91,29 @@ export class ConsumerService implements OnModuleInit {
         for (const sql of tables) {
             try { await this.pool.query(sql); } catch (e) { console.error('Table error:', e.message); }
         }
+
+        // Migrations: Add sack_size_kg column and update unique constraint if not exists
+        const migrations = [
+            // Add sack_size_kg column if not exists
+            `ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS sack_size_kg INTEGER DEFAULT NULL`,
+            // Drop old unique constraint if exists and create new one
+            `DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cart_items_user_id_product_id_key') THEN
+                    ALTER TABLE cart_items DROP CONSTRAINT cart_items_user_id_product_id_key;
+                END IF;
+            END $$`,
+            // Create new unique constraint with sack_size_kg (if not exists)
+            `DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cart_items_user_id_product_id_sack_size_kg_key') THEN
+                    ALTER TABLE cart_items ADD CONSTRAINT cart_items_user_id_product_id_sack_size_kg_key UNIQUE (user_id, product_id, sack_size_kg);
+                END IF;
+            END $$`
+        ];
+
+        for (const sql of migrations) {
+            try { await this.pool.query(sql); } catch (e) { console.error('Migration error:', e.message); }
+        }
+
         console.log('✅ Consumer tables verified');
     }
 
@@ -177,9 +201,10 @@ export class ConsumerService implements OnModuleInit {
     // Cart
     async getCart(userId: number) {
         const res = await this.pool.query(
-            `SELECT ci.*, p.variety_name, p.rice_type, p.price_per_kg as price, p.quantity_unit as unit, 
+            `SELECT ci.*, ci.sack_size_kg, p.variety_name, p.rice_type, p.price_per_kg, p.quantity_unit as unit, 
              pr.farm_name, u.email as farmer_email,
-             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images
+             COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
+             COALESCE((SELECT ps.price FROM product_sack_sizes ps WHERE ps.product_id = p.product_id AND ps.size_kg = ci.sack_size_kg), p.price_per_kg) as unit_price
              FROM cart_items ci 
              JOIN products p ON ci.product_id = p.product_id 
              LEFT JOIN users u ON p.farmer_id = u.user_id
@@ -187,15 +212,28 @@ export class ConsumerService implements OnModuleInit {
              WHERE ci.user_id = $1 ORDER BY ci.created_at DESC`,
             [userId]
         );
-        return res.rows;
+        // Calculate item_total for each item
+        return res.rows.map(row => ({
+            ...row,
+            item_total: row.sack_size_kg 
+                ? parseFloat(row.unit_price) * row.quantity  // sack purchase: price per sack × quantity
+                : parseFloat(row.price_per_kg) * row.quantity // kg purchase: price per kg × quantity
+        }));
     }
 
     async addToCart(userId: number, data: any) {
-        const { product_id, quantity } = data;
+        const { product_id, quantity, sack_size_kg } = data;
+        
+        // Validate sack_size_kg if provided (must be null, 10, 25, or 50)
+        const validSackSizes = [10, 25, 50];
+        if (sack_size_kg !== null && sack_size_kg !== undefined && !validSackSizes.includes(sack_size_kg)) {
+            throw new NotFoundException(`Invalid sack size. Valid options are: ${validSackSizes.join(', ')} kg`);
+        }
+        
         const res = await this.pool.query(
-            `INSERT INTO cart_items (user_id, product_id, quantity) VALUES ($1, $2, $3)
-             ON CONFLICT (user_id, product_id) DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW() RETURNING *`,
-            [userId, product_id, quantity || 1]
+            `INSERT INTO cart_items (user_id, product_id, quantity, sack_size_kg) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (user_id, product_id, sack_size_kg) DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity, updated_at = NOW() RETURNING *`,
+            [userId, product_id, quantity || 1, sack_size_kg || null]
         );
         return res.rows[0];
     }
