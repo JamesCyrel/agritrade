@@ -5,42 +5,125 @@
 This guide will help you set up the complete AgriTrade system from scratch.
 Follow the steps in order to ensure everything works correctly.
 
+The backend uses NestJS (TypeScript) with PostgreSQL database.
+The mobile app uses React Native with Expo.
+
 ================================================================================
                             PREREQUISITES
 ================================================================================
 
 Before starting, make sure you have installed:
 
-1. Node.js (v14 or higher)
+1. Node.js (v18 or higher recommended, minimum v16)
    - Download from: https://nodejs.org/
    - Verify installation: node --version
+   - Recommended: Use LTS version
 
 2. PostgreSQL (v12 or higher)
    - Download from: https://www.postgresql.org/download/
    - Verify installation: psql --version
    - Make sure PostgreSQL service is running
+   - Remember your postgres superuser password during installation
 
 3. npm (comes with Node.js)
    - Verify installation: npm --version
 
-4. For Mobile App:
-   - Expo CLI (will be installed automatically)
+4. Git (for cloning the repository)
+   - Download from: https://git-scm.com/downloads
+   - Verify installation: git --version
+
+5. For Mobile App:
+   - Expo CLI (will be installed automatically via npx)
    - Expo Go app on your phone (for testing on physical device)
+     - iOS: Download from App Store
+     - Android: Download from Google Play Store
    - OR Android Studio / Xcode for emulators
 
+6. Code Editor (recommended):
+   - Visual Studio Code: https://code.visualstudio.com/
+
 ================================================================================
-                         STEP 1: BACKEND SETUP
+                     STEP 1: CLONE THE REPOSITORY
 ================================================================================
 
-1. Navigate to backend directory:
+1. Open a terminal/command prompt
+
+2. Navigate to your desired directory:
+   cd your/projects/folder
+
+3. Clone the repository:
+   git clone https://github.com/JamesCyrel/agritrade.git
+
+4. Navigate into the project:
+   cd agritrade
+
+5. Switch to the NestJS migration branch:
+   git checkout nest.js-migration
+
+================================================================================
+                         STEP 2: DATABASE SETUP
+================================================================================
+
+1. Start PostgreSQL service (if not running):
+   - Windows: Open Services (Win+R, type services.msc), find PostgreSQL, Start
+   - Mac: brew services start postgresql
+   - Linux: sudo systemctl start postgresql
+
+2. Create the database:
+   
+   Option A - Using Command Line:
+   - Open terminal/command prompt
+   - Connect to PostgreSQL:
+     psql -U postgres
+   - Enter your postgres password when prompted
+   - Create the database:
+     CREATE DATABASE agritrader;
+   - Exit psql:
+     \q
+
+   Option B - Using pgAdmin:
+   - Open pgAdmin
+   - Right-click on "Databases"
+   - Select "Create" > "Database"
+   - Enter name: agritrader
+   - Click "Save"
+
+3. Initialize the database schema:
+   - Navigate to backend directory:
+     cd backend
+   - Run the init.sql file:
+     psql -U postgres -d agritrader -f init.sql
+   - Enter your postgres password when prompted
+
+   This creates the following tables:
+   - users (user accounts with roles: CONSUMER, FARMER, ADMIN)
+   - profiles (user profile information)
+   - verification_documents (farmer verification docs)
+   - products (rice products listing)
+   - product_images (product image URLs)
+   - product_sack_sizes (product pricing by sack size)
+   - consumer_addresses (delivery addresses)
+   - payment_methods (saved payment methods)
+
+================================================================================
+                         STEP 3: BACKEND SETUP
+================================================================================
+
+1. Navigate to backend directory (if not already there):
    cd agritrade/backend
 
 2. Install backend dependencies:
    npm install
 
+   This will install all required packages including:
+   - NestJS framework and related packages
+   - PostgreSQL driver (pg)
+   - Authentication packages (passport, JWT)
+   - bcrypt for password hashing
+
 3. Create .env file in the backend directory:
    - Create a new file named ".env" in agritrade/backend/
-   - Add the following content (update with your database credentials):
+   - Add the following content (update with your credentials):
    
      DB_HOST=localhost
      DB_PORT=5432
@@ -49,36 +132,52 @@ Before starting, make sure you have installed:
      DB_PASSWORD=your_postgres_password
      JWT_SECRET=your_random_secret_key_here
      PORT=3000
+     
+     # Supabase Configuration (optional - for cloud database)
+     SUPABASE_URL=your_supabase_url
+     SUPABASE_ANON_KEY=your_supabase_anon_key
+     SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+     SUPABASE_DB_URL=postgresql://postgres:password@localhost:5432/agritrader
    
    Note: Replace "your_postgres_password" with your actual PostgreSQL password
    Note: Replace "your_random_secret_key_here" with a secure random string
          (You can generate one at: https://randomkeygen.com/)
+   Note: For local development, use local PostgreSQL credentials
+   Note: SUPABASE_DB_URL is used by the seed script
 
-4. Create PostgreSQL database:
-   - Open PostgreSQL command line or pgAdmin
-   - Run: CREATE DATABASE agritrader;
-   - Or use pgAdmin GUI to create the database
-
-5. Run the admin seed script to create default admin account:
-   npm run seed:admin
+4. Seed the database with test data:
+   npm run seed
    
    This will create:
-   - Email: admin@agritrade.com
-   - Password: admin123
-   - Role: ADMIN
+   - 1 Admin user
+   - 3 Farmer users (with profiles and approved verification)
+   - 2 Consumer users (with addresses)
+   - 6 Sample products (with sack sizes and pricing)
 
-6. Start the backend server:
-   npm run dev    (for development with auto-reload)
-   OR
-   npm start      (for production)
+   Test Account Credentials (password for all: password123):
+   - Admin:    admin@agritrade.com
+   - Farmer:   juan.farmer@example.com
+   - Farmer:   maria.farmer@example.com
+   - Farmer:   pedro.farmer@example.com
+   - Consumer: consumer1@example.com
+   - Consumer: consumer2@example.com
 
-7. Verify backend is running:
-   - Open browser: http://localhost:3000/health
-   - You should see: {"success":true,"message":"AgriTrade API is running",...}
+5. Start the backend server:
+   
+   For development (with auto-reload on file changes):
+   npm run start:dev
+   
+   For production:
+   npm run build
+   npm run start:prod
+
+6. Verify backend is running:
+   - Open browser: http://localhost:3000
+   - You should see the API response or welcome message
    - Keep this terminal window open - the server must stay running
 
 ================================================================================
-                         STEP 2: MOBILE APP SETUP
+                         STEP 4: MOBILE APP SETUP
 ================================================================================
 
 1. Navigate to mobile directory (in a NEW terminal window):
@@ -87,160 +186,454 @@ Before starting, make sure you have installed:
 2. Install mobile app dependencies:
    npm install
 
-3. Configure API URL (if needed):
-   - Open: agritrade/mobile/services/api.js
-   - Find the API_BASE_URL (around line 2-3)
-   - For emulator/simulator: Keep as is (http://localhost:3000/api)
-   - For physical device: Change to your computer's IP address:
-     const API_BASE_URL = 'http://YOUR_COMPUTER_IP:3000/api'; for example: http://192.168.1.1:3000/api
-     
-     To find your IP address:
-     - Windows: Open Command Prompt, type: ipconfig
-       Look for "IPv4 Address" (e.g., 192.168.1.100)
-     - Mac/Linux: Open Terminal, type: ifconfig
-       Look for "inet" under your network adapter
+   This will install all required packages including:
+   - Expo framework
+   - React Navigation
+   - AsyncStorage for local data
+   - Various Expo modules
+
+3. Configure API URL:
+   The mobile app automatically detects the API URL based on platform.
+   
+   The configuration is in: agritrade/mobile/services/api.js
+   
+   Default behavior:
+   - Android: Uses http://192.168.12.1:3000
+   - iOS/Web: Uses http://localhost:3000
+
+   For physical device testing:
+   You need to update the API URL to your computer's local IP address.
+   
+   Option A - Using Environment Variable (Recommended):
+   Create a file named ".env" in agritrade/mobile/ with:
+   EXPO_PUBLIC_API_URL=http://YOUR_COMPUTER_IP:3000
+   
+   Option B - Edit api.js directly:
+   Open agritrade/mobile/services/api.js and modify the defaultRoot variable.
+
+   To find your computer's IP address:
+   - Windows: Open Command Prompt, type: ipconfig
+     Look for "IPv4 Address" under your active network adapter
+     Example: 192.168.1.100
+   - Mac: Open Terminal, type: ifconfig
+     Look for "inet" under en0 or en1
+   - Linux: Open Terminal, type: ip addr
+     Look for "inet" under your network interface
+
+   Important: Your phone and computer must be on the SAME network.
 
 4. Start the mobile app:
    npx expo start
    
+   Or use npm script:
+   npm start
+   
    This will:
    - Start the Expo development server
    - Show a QR code in the terminal
-   - Open Expo DevTools in your browser
+   - Display options for running the app
 
-5. Run the app:
-   Option A - Physical Device:
-   - Install "Expo Go" app on your phone (iOS/Android)
-   - Scan the QR code from the terminal with:
-     * iOS: Camera app
-     * Android: Expo Go app
-   
-   Option B - Emulator/Simulator:
-   - Press 'a' for Android emulator
-   - Press 'i' for iOS simulator (Mac only)
-   - Press 'w' for web browser
+5. Run the app on your device:
+
+   Option A - Physical Device (Recommended for testing):
+   - Install "Expo Go" app on your phone
+     - iOS: App Store
+     - Android: Google Play Store
+   - Make sure phone and computer are on the same network
+   - Scan the QR code from the terminal:
+     - iOS: Use the Camera app
+     - Android: Use the Expo Go app's scanner
+   - The app will download and run
+
+   Option B - Android Emulator:
+   - Install Android Studio
+   - Set up an Android Virtual Device (AVD)
+   - Start the emulator
+   - Press 'a' in the Expo terminal
+
+   Option C - iOS Simulator (Mac only):
+   - Install Xcode from App Store
+   - Press 'i' in the Expo terminal
+
+   Option D - Web Browser:
+   - Press 'w' in the Expo terminal
+   - Note: Some features may not work in web mode
 
 ================================================================================
-                         STEP 3: VERIFY SETUP
+                     STEP 5: NETWORK CONFIGURATION
+================================================================================
+
+For the mobile app to communicate with the backend:
+
+1. Same Machine (Emulator/Simulator):
+   - localhost or 127.0.0.1 should work
+   - Android emulator may need: 10.0.2.2
+
+2. Physical Device on Same Network:
+   - Use your computer's local IP address (e.g., 192.168.x.x)
+   - Ensure both devices are on the same WiFi network
+   - Check that your firewall allows connections on port 3000
+
+3. Using Mobile Hotspot (Recommended for reliable connection):
+   - Enable mobile hotspot on your laptop/computer
+   - Connect your phone to the laptop's hotspot
+   - Find the hotspot IP address:
+     - Windows: Usually 192.168.137.1 or similar
+     - Run ipconfig and look for the hotspot adapter
+   - Use this IP in your API configuration
+
+4. Firewall Configuration (Windows):
+   - Open Windows Defender Firewall
+   - Click "Advanced settings"
+   - Inbound Rules > New Rule
+   - Select "Port" > TCP > Specific port: 3000
+   - Allow the connection
+   - Apply to all profiles
+   - Name it "AgriTrade Backend"
+
+5. Firewall Configuration (Mac):
+   - System Preferences > Security & Privacy > Firewall
+   - Firewall Options
+   - Allow incoming connections for Node.js
+
+================================================================================
+                         STEP 6: VERIFY SETUP
 ================================================================================
 
 1. Backend Verification:
-   ✓ Server is running on http://localhost:3000
-   ✓ Health check returns success
-   ✓ Admin account created (check server logs)
+   - Server is running on http://localhost:3000
+   - No errors in the terminal
+   - Database connection successful (check terminal logs)
 
-2. Mobile App Verification:
-   ✓ App loads without errors
-   ✓ Can see login screen
-   ✓ Can login with admin credentials:
-     - Email: admin@agritrade.com
-     - Password: admin123
+2. Database Verification:
+   - Connect to database: psql -U postgres -d agritrader
+   - List tables: \dt
+   - Check users: SELECT email, role FROM users;
+   - You should see the seeded users
 
-3. Test Login:
+3. Mobile App Verification:
+   - App loads without errors
+   - Can see the login screen
+   - No red error screens
+
+4. End-to-End Test:
    - Open the mobile app
-   - Enter admin credentials
+   - Login with test credentials:
+     - Email: admin@agritrade.com
+     - Password: password123
    - Should redirect to Admin Dashboard
    - If you see the dashboard, setup is complete!
 
+   Other test logins:
+   - Farmer: juan.farmer@example.com / password123
+   - Consumer: consumer1@example.com / password123
+
 ================================================================================
-                      DEFAULT ADMIN CREDENTIALS
+                      TEST ACCOUNT CREDENTIALS
 ================================================================================
 
-Email:    admin@agritrade.com
-Password: admin123
-Role:     ADMIN
+All test accounts use the same password: password123
 
-IMPORTANT: Change these credentials after first login in production!
+Admin Account:
+  Email:    admin@agritrade.com
+  Password: password123
+  Role:     ADMIN
+
+Farmer Accounts:
+  Email:    juan.farmer@example.com
+  Password: password123
+  Role:     FARMER
+  Farm:     Dela Cruz Rice Farm
+
+  Email:    maria.farmer@example.com
+  Password: password123
+  Role:     FARMER
+  Farm:     Santos Family Farm
+
+  Email:    pedro.farmer@example.com
+  Password: password123
+  Role:     FARMER
+  Farm:     Reyes Organic Rice
+
+Consumer Accounts:
+  Email:    consumer1@example.com
+  Password: password123
+  Role:     CONSUMER
+
+  Email:    consumer2@example.com
+  Password: password123
+  Role:     CONSUMER
+
+IMPORTANT: Change these credentials in production!
 
 ================================================================================
                          TROUBLESHOOTING
 ================================================================================
 
-1. "Cannot connect to database"
-   - Check PostgreSQL is running
-   - Verify database credentials in .env file
+DATABASE ISSUES:
+
+1. "Cannot connect to database" or "Connection refused"
+   - Check PostgreSQL service is running:
+     - Windows: Services > PostgreSQL (should show "Running")
+     - Mac: brew services list | grep postgresql
+     - Linux: systemctl status postgresql
+   - Verify database credentials in backend/.env file
    - Make sure database "agritrader" exists
+   - Test connection: psql -U postgres -d agritrader
 
-2. "Port 3000 already in use"
-   - Change PORT in backend/.env file
-   - Update mobile/services/api.js to match new port
+2. "Database does not exist"
+   - Create the database: CREATE DATABASE agritrader;
+   - Or run: psql -U postgres -c "CREATE DATABASE agritrader;"
 
-3. "Module not found" errors
-   - Run "npm install" again in the problematic directory
-   - Delete node_modules folder and run npm install fresh
+3. "Permission denied" or "Authentication failed"
+   - Check your postgres password in .env file
+   - Try resetting postgres password if forgotten
+   - Verify DB_USER is correct (usually "postgres")
 
-4. Mobile app can't connect to backend
-   - Check backend server is running
-   - Verify API_BASE_URL in mobile/services/api.js
-   - For physical device: Use computer's IP address, not localhost
+4. "Relation does not exist" errors
+   - Run the init.sql script to create tables:
+     psql -U postgres -d agritrader -f init.sql
+   - Then run the seed: npm run seed
+
+BACKEND ISSUES:
+
+5. "Port 3000 already in use"
+   - Find what's using the port:
+     - Windows: netstat -ano | findstr :3000
+     - Mac/Linux: lsof -i :3000
+   - Kill the process or change PORT in backend/.env
+   - Update mobile app API URL if you change the port
+
+6. "Module not found" errors
+   - Delete node_modules and reinstall:
+     - Windows: rmdir /s /q node_modules && npm install
+     - Mac/Linux: rm -rf node_modules && npm install
+   - Also try deleting package-lock.json before reinstalling
+
+7. "Cannot find module 'bcrypt'" or native module errors
+   - Rebuild native modules:
+     npm rebuild
+   - If still failing, reinstall bcrypt:
+     npm uninstall bcrypt && npm install bcrypt
+
+8. TypeScript compilation errors
+   - Run: npm run build
+   - Check for syntax errors in the terminal output
+   - Make sure all dependencies are installed
+
+MOBILE APP ISSUES:
+
+9. "Network request failed" or "Could not connect to server"
+   - Verify backend server is running
+   - Check API URL configuration in mobile/services/api.js
+   - For physical device: Use computer's IP, not localhost
+   - Ensure both devices are on the same network
    - Check firewall settings (may block port 3000)
+   - Try using mobile hotspot (see Step 5)
 
-5. "Admin account already exists"
-   - This is normal - the seed script checks for duplicates
-   - You can use existing admin account or create new one via signup
+10. App crashes on startup
+    - Clear Expo cache: npx expo start --clear
+    - Delete node_modules and reinstall
+    - Check for JavaScript errors in terminal
 
-6. Database connection timeout
-   - Check PostgreSQL is running: 
-     * Windows: Services > PostgreSQL
-     * Mac: brew services list
-     * Linux: systemctl status postgresql
+11. "Unable to resolve module" errors
+    - Clear Metro bundler cache:
+      npx expo start --clear
+    - Reinstall dependencies:
+      rm -rf node_modules && npm install
+
+12. QR code not scanning
+    - Make sure Expo Go app is installed
+    - Try pressing 's' to switch to Expo Go mode
+    - Check that phone camera has permission
+    - Try typing the URL manually in Expo Go
+
+13. App loads but shows blank screen
+    - Check terminal for JavaScript errors
+    - Verify API URL is correct
+    - Check backend server logs for errors
+
+SEED SCRIPT ISSUES:
+
+14. "Seed script fails" or "Duplicate key" errors
+    - The seed script clears existing data before inserting
+    - If errors persist, manually clear the database:
+      psql -U postgres -d agritrader -c "DELETE FROM products; DELETE FROM profiles; DELETE FROM users;"
+    - Then run: npm run seed
+
+15. "SUPABASE_DB_URL not found"
+    - Add SUPABASE_DB_URL to backend/.env:
+      SUPABASE_DB_URL=postgresql://postgres:your_password@localhost:5432/agritrader
+
+GENERAL TIPS:
+
+16. Always check terminal output for specific error messages
+17. Google the exact error message for solutions
+18. Make sure all environment variables are set correctly
+19. Restart both backend and mobile app after config changes
+20. Use console.log statements to debug issues
 
 ================================================================================
                          PROJECT STRUCTURE
 ================================================================================
 
 agritrade/
-├── backend/              # Backend API (Node.js + Express + PostgreSQL)
-│   ├── config/           # Database configuration
-│   ├── controllers/      # Request handlers
-│   ├── models/           # Database models
-│   ├── routes/           # API routes
-│   ├── scripts/          # Seed/migration scripts
-│   └── server.js         # Main server file
-│
-├── mobile/               # Mobile App (React Native + Expo)
-│   ├── app/              # Screen components (file-based routing)
-│   ├── services/         # API service layer
-│   └── assets/           # Images and static files
-│
-└── SETUP_GUIDE.txt       # This file
+|
+|-- backend/                 # NestJS Backend API (TypeScript)
+|   |-- src/
+|   |   |-- admin/           # Admin module (controller, service)
+|   |   |-- auth/            # Authentication (JWT, login, register)
+|   |   |-- common/          # Shared decorators and guards
+|   |   |-- consumer/        # Consumer module
+|   |   |-- database/        # Database connection and seed scripts
+|   |   |-- farmers/         # Farmer module
+|   |   |-- products/        # Products module
+|   |   |-- users/           # Users module
+|   |   |-- app.module.ts    # Main application module
+|   |   |-- main.ts          # Application entry point
+|   |-- public/              # Static files (images, assets)
+|   |-- test/                # E2E tests
+|   |-- .env                 # Environment configuration (create this!)
+|   |-- init.sql             # Database schema initialization
+|   |-- package.json         # Backend dependencies and scripts
+|   |-- tsconfig.json        # TypeScript configuration
+|
+|-- mobile/                  # React Native Mobile App (Expo)
+|   |-- app/                 # Screen components (file-based routing)
+|   |   |-- admin/           # Admin screens
+|   |   |-- auth/            # Login/Register screens
+|   |   |-- consumer/        # Consumer screens
+|   |   |-- farmer/          # Farmer screens
+|   |   |-- _layout.tsx      # Root layout component
+|   |   |-- index.js         # Entry point
+|   |-- assets/              # Images and static files
+|   |-- services/
+|   |   |-- api.js           # API service layer (API calls)
+|   |-- package.json         # Mobile dependencies
+|
+|-- backend-legacy/          # Legacy Express.js backend (deprecated)
+|   |-- (old code for reference only)
+|
+|-- SETUP_GUIDE.txt          # This file
+|-- README.md                # Project overview
+
+================================================================================
+                         AVAILABLE SCRIPTS
+================================================================================
+
+Backend Commands (run from agritrade/backend):
+
+  npm install              # Install all dependencies
+  npm run start:dev        # Start development server with auto-reload
+  npm run start            # Start server (production mode)
+  npm run build            # Compile TypeScript to JavaScript
+  npm run start:prod       # Start compiled production server
+  npm run seed             # Seed database with test data
+  npm run lint             # Run ESLint to check code quality
+  npm run test             # Run unit tests
+  npm run test:e2e         # Run end-to-end tests
+  npm run format           # Format code with Prettier
+
+Mobile Commands (run from agritrade/mobile):
+
+  npm install              # Install all dependencies
+  npm start                # Start Expo development server
+  npx expo start           # Same as above (alternative)
+  npx expo start --clear   # Start with cleared cache
+  npm run android          # Start on Android device/emulator
+  npm run ios              # Start on iOS simulator (Mac only)
+  npm run web              # Start in web browser
+  npm run lint             # Run linter
+
+================================================================================
+                    DEVELOPMENT WORKFLOW
+================================================================================
+
+Daily Development:
+
+1. Start the backend server (Terminal 1):
+   cd agritrade/backend
+   npm run start:dev
+
+2. Start the mobile app (Terminal 2):
+   cd agritrade/mobile
+   npm start
+
+3. Make code changes - both will auto-reload
+
+Adding New Features:
+
+1. Backend:
+   - Create new module: nest generate module feature-name
+   - Create controller: nest generate controller feature-name
+   - Create service: nest generate service feature-name
+   - Add routes in the controller
+   - Update database schema if needed (init.sql)
+
+2. Mobile:
+   - Add new screen in app/ directory (file-based routing)
+   - Add API calls in services/api.js
+   - Import and use in your components
+
+================================================================================
+                    DEPLOYMENT CONSIDERATIONS
+================================================================================
+
+Before deploying to production:
+
+1. Change all default passwords and secrets
+2. Use environment variables for sensitive data
+3. Set up proper database backups
+4. Configure HTTPS/SSL certificates
+5. Set up proper logging and monitoring
+6. Review and restrict CORS settings
+7. Remove or secure test accounts
+8. Set NODE_ENV=production
 
 ================================================================================
                          QUICK REFERENCE
 ================================================================================
 
-Backend Commands:
-  cd agritrade/backend
-  npm install              # Install dependencies
-  npm run seed:admin       # Create admin account
-  npm run dev              # Start development server
-  npm start                # Start production server
+Backend Server URL:
+  Local:  http://localhost:3000
+  API:    http://localhost:3000/api
 
-Mobile Commands:
-  cd agritrade/mobile
-  npm install              # Install dependencies
-  npx expo start or npm start        # Start Expo development server
+Important Files to Configure:
+  backend/.env              # Database and JWT configuration
+  mobile/services/api.js    # API endpoint configuration
 
-  #!!!!make sure to on your hotspot on your laptop and connect the phone to the hotspot for the connection.
+Test Accounts (password: password123):
+  Admin:    admin@agritrade.com
+  Farmer:   juan.farmer@example.com
+  Consumer: consumer1@example.com
 
-Important Files:
-  backend/.env            # Backend configuration (create this!)
-  mobile/services/api.js  # API endpoint configuration
+Database Connection:
+  Host:     localhost
+  Port:     5432
+  Database: agritrader
+  User:     postgres
+
+Physical Device Testing Tip:
+  Enable mobile hotspot on your laptop and connect your phone to it.
+  This provides the most reliable connection for testing.
 
 ================================================================================
                          SUPPORT
 ================================================================================
 
 If you encounter issues:
-1. Check the error messages in terminal
-2. Verify all prerequisites are installed
-3. Ensure database is running and accessible
-4. Check network connectivity for mobile app
-5. Review the troubleshooting section above
+1. Check the terminal for specific error messages
+2. Review the troubleshooting section above
+3. Verify all prerequisites are installed correctly
+4. Ensure database is running and accessible
+5. Check network connectivity between devices
+6. Make sure environment variables are set correctly
+7. Try clearing caches and reinstalling dependencies
+
+Repository: https://github.com/JamesCyrel/agritrade
+Branch: nest.js-migration
 
 ================================================================================
                          END OF SETUP GUIDE
 ================================================================================
-
-Good luck with your AgriTrade setup! 🚀
 
