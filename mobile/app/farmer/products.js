@@ -141,7 +141,7 @@ export default function ProductsScreen() {
               </View>
               <View style={[styles.statusBadge, product.status === 'ACTIVE' ? styles.activeBadge : styles.inactiveBadge]}>
                 <Text style={[styles.statusText, product.status === 'ACTIVE' ? styles.activeText : styles.inactiveText]}>
-                  {product.status === 'ACTIVE' ? 'Active' : product.status === 'INACTIVE' ? 'Inactive' : 'Deleted'}
+                  {product.status === 'ACTIVE' ? 'Active' : product.status === 'INACTIVE' ? 'Inactive' : product.status === 'OUT_OF_STOCK' ? 'Out of Stock' : product.status === 'ARCHIVED' ? 'Archived' : product.status}
                 </Text>
               </View>
             </View>

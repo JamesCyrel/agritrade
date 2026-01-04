@@ -298,8 +298,9 @@ function OrderCard({ order, onPress }) {
         
         <View style={styles.orderInfoRow}>
           <Package size={16} color="#666" style={{ marginRight: 8 }} />
-          <Text style={styles.orderInfoText}>
+          <Text style={styles.orderInfoText} numberOfLines={2}>
             {items.length || 0} {items.length === 1 ? "item" : "items"}
+            {items.length > 0 && ` - ${items.map(i => i.variety_name || i.product_name || 'Unknown').join(', ')}`}
           </Text>
         </View>
       </View>

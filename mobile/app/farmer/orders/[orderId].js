@@ -318,7 +318,7 @@ export default function OrderDetailScreen() {
           {items.map((item, index) => (
             <View key={index} style={styles.itemRow}>
               <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.product_name}</Text>
+                <Text style={styles.itemName}>{item.variety_name || item.product_name || 'Rice Product'}</Text>
                 <Text style={styles.itemDetails}>
                   {item.quantity} kg × ₱{parseFloat(item.unit_price).toFixed(2)}
                 </Text>

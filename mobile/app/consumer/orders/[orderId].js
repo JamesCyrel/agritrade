@@ -39,9 +39,9 @@ export default function OrderDetailScreen() {
     };
   }, [orderId]);
 
-  // Start timer when order is CONFIRMED
+  // Start timer when order is OUT_FOR_DELIVERY (farmer accepted)
   useEffect(() => {
-    if (order && order.status === "CONFIRMED" && !timerRef.current) {
+    if (order && order.status === "OUT_FOR_DELIVERY" && !timerRef.current) {
       startDeliveryTimer();
     }
   }, [order]);
@@ -113,9 +113,9 @@ export default function OrderDetailScreen() {
     try {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.checkOrderReview(token, orderId);
-      if (res.success) {
-        setHasReviewed(res.data.hasReviewed);
-        setReviewData(res.data.review);
+      if (res.success && res.data) {
+        setHasReviewed(res.data.hasReviewed || false);
+        setReviewData(res.data.review || null);
       }
     } catch (error) {
       console.error("Check review status error:", error);

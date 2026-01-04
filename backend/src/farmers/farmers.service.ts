@@ -8,6 +8,59 @@ export class FarmersService implements OnModuleInit {
 
   async onModuleInit() {
     await this.createVerificationTables();
+    await this.createLedgerAndPayoutTables();
+  }
+
+  async createLedgerAndPayoutTables() {
+    const query = `
+      CREATE TABLE IF NOT EXISTS farmer_ledger (
+        ledger_id SERIAL PRIMARY KEY,
+        farmer_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+        order_id INTEGER REFERENCES orders(order_id) ON DELETE SET NULL,
+        amount DECIMAL(10,2) NOT NULL,
+        balance_after DECIMAL(10,2),
+        transaction_type VARCHAR(20) NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE TABLE IF NOT EXISTS farmer_payouts (
+        payout_id SERIAL PRIMARY KEY,
+        farmer_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+        amount DECIMAL(10,2) NOT NULL,
+        commission_amount DECIMAL(10,2) DEFAULT 0,
+        net_amount DECIMAL(10,2) NOT NULL,
+        status VARCHAR(20) DEFAULT 'PENDING',
+        bank_name VARCHAR(100),
+        bank_account_number VARCHAR(50),
+        period_start DATE,
+        period_end DATE,
+        processed_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE TABLE IF NOT EXISTS commission_settings (
+        setting_id SERIAL PRIMARY KEY,
+        commission_rate DECIMAL(5,4) DEFAULT 0.05,
+        min_commission DECIMAL(10,2) DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      -- Insert default commission settings if not exists
+      INSERT INTO commission_settings (commission_rate, min_commission)
+      SELECT 0.05, 0
+      WHERE NOT EXISTS (SELECT 1 FROM commission_settings);
+      
+      CREATE INDEX IF NOT EXISTS idx_farmer_ledger_farmer_id ON farmer_ledger(farmer_id);
+      CREATE INDEX IF NOT EXISTS idx_farmer_payouts_farmer_id ON farmer_payouts(farmer_id);
+    `;
+    try {
+      await this.pool.query(query);
+      console.log('✅ Farmer ledger and payout tables created/verified');
+    } catch (error) {
+      console.error('❌ Error creating farmer ledger tables:', error);
+    }
   }
 
   async createVerificationTables() {
@@ -192,7 +245,7 @@ export class FarmersService implements OnModuleInit {
 
   async acceptOrder(farmerId: number, orderId: number) {
     const res = await this.pool.query(`
-            UPDATE orders SET status = 'ACCEPTED', updated_at = NOW()
+            UPDATE orders SET status = 'OUT_FOR_DELIVERY', updated_at = NOW()
             WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'
             RETURNING *
         `, [orderId, farmerId]);
@@ -291,14 +344,42 @@ export class FarmersService implements OnModuleInit {
 
   // ===================== Farmer Ledger =====================
   async getLedger(farmerId: number) {
-    const res = await this.pool.query(`
+    console.log('getLedger called for farmerId:', farmerId);
+    
+    // Backfill: Create ledger entries for delivered orders that don't have them
+    await this.pool.query(`
+      INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, balance_before, balance_after, description, created_at)
+      SELECT o.farmer_id, o.order_id, o.total_amount, 'EARNING', 0, o.total_amount, 
+             'Earnings from order #' || o.order_id, o.updated_at
+      FROM orders o
+      WHERE o.farmer_id = $1 AND o.status = 'DELIVERED'
+        AND NOT EXISTS (SELECT 1 FROM farmer_ledger fl WHERE fl.order_id = o.order_id AND fl.transaction_type = 'EARNING')
+    `, [farmerId]);
+    
+    const ledgerRes = await this.pool.query(`
             SELECT fl.*, o.order_id, o.total_amount as order_total
             FROM farmer_ledger fl
             LEFT JOIN orders o ON fl.order_id = o.order_id
             WHERE fl.farmer_id = $1
             ORDER BY fl.created_at DESC
         `, [farmerId]);
-    return res.rows;
+    console.log('Ledger entries found:', ledgerRes.rowCount);
+    
+    // Calculate current balance by summing all entries
+    // EARNING is positive, others (PAYOUT, COMMISSION, REFUND, COD_FEE) are negative
+    const balanceRes = await this.pool.query(`
+            SELECT COALESCE(SUM(
+              CASE WHEN transaction_type = 'EARNING' THEN amount ELSE -amount END
+            ), 0) as current_balance
+            FROM farmer_ledger
+            WHERE farmer_id = $1
+        `, [farmerId]);
+    console.log('Current balance:', balanceRes.rows[0]?.current_balance);
+    
+    return {
+      ledger: ledgerRes.rows,
+      currentBalance: parseFloat(balanceRes.rows[0]?.current_balance || 0)
+    };
   }
 
   // ===================== Farmer Payouts =====================

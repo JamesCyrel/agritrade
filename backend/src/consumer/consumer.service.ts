@@ -502,10 +502,10 @@ export class ConsumerService implements OnModuleInit {
         try {
             await client.query('BEGIN');
             
-            // Update order status to DELIVERED
+            // Update order status to DELIVERED (from OUT_FOR_DELIVERY)
             const res = await client.query(
                 `UPDATE orders SET status = 'DELIVERED', updated_at = NOW() 
-                 WHERE order_id = $1 AND user_id = $2 AND status = 'CONFIRMED' 
+                 WHERE order_id = $1 AND user_id = $2 AND status = 'OUT_FOR_DELIVERY' 
                  RETURNING *`,
                 [orderId, userId]
             );
@@ -515,15 +515,26 @@ export class ConsumerService implements OnModuleInit {
             }
             
             const order = res.rows[0];
+            console.log('Mark Order Delivered - Order:', orderId, 'Farmer:', order.farmer_id, 'Amount:', order.total_amount);
             
             // Stock was already deducted when order was placed, so we just create ledger entry
             // Create earnings ledger entry for the farmer
-            await client.query(
-                `INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, description)
-                 VALUES ($1, $2, $3, 'SALE', $4)
-                 ON CONFLICT DO NOTHING`,
-                [order.farmer_id, orderId, order.total_amount, `Order #${orderId} delivered`]
+            // First check if entry already exists for this order
+            const existingEntry = await client.query(
+                `SELECT ledger_id FROM farmer_ledger WHERE order_id = $1 AND transaction_type = 'EARNING'`,
+                [orderId]
             );
+            console.log('Existing ledger entry check - count:', existingEntry.rowCount);
+            
+            if (existingEntry.rowCount === 0) {
+                const ledgerResult = await client.query(
+                    `INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, balance_before, balance_after, description)
+                     VALUES ($1, $2, $3, 'EARNING', 0, $3, $4)
+                     RETURNING ledger_id`,
+                    [order.farmer_id, orderId, order.total_amount, `Earnings from order #${orderId}`]
+                );
+                console.log('Ledger entry created - ID:', ledgerResult.rows[0]?.ledger_id);
+            }
             
             await client.query('COMMIT');
             return order;

@@ -127,32 +127,37 @@ export default function FarmerEarningsScreen() {
     return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   };
 
-  // Compute earnings from ledger entries (EARNING positive, COMMISSION negative, REFUND negative, PAYOUT negative)
+  // Compute earnings from ledger entries (EARNING positive, COMMISSION/REFUND/PAYOUT/COD_FEE negative)
   const stats = useMemo(() => {
     let week = 0, weekOrders = 0;
     let month = 0, monthOrders = 0;
-    let total = currentBalance || 0; // use server balance for total
+    let total = 0;
     let totalOrders = 0;
     (Array.isArray(ledger) ? ledger : []).forEach((entry) => {
       const amount = parseFloat(entry.amount || 0);
       const type = entry.transaction_type;
-      const signed = (type === 'EARNING') ? amount : -Math.abs(amount);
-      if (type === 'EARNING') totalOrders += 1;
+      // Only EARNING is positive (income), others are negative (deductions)
+      const isPositive = (type === 'EARNING');
+      const signed = isPositive ? amount : -Math.abs(amount);
+      if (isPositive) totalOrders += 1;
+      total += signed;
       if (isSameWeek(entry.created_at)) {
         week += signed;
-        if (type === 'EARNING') weekOrders += 1;
+        if (isPositive) weekOrders += 1;
       }
       if (isSameMonth(entry.created_at)) {
         month += signed;
-        if (type === 'EARNING') monthOrders += 1;
+        if (isPositive) monthOrders += 1;
       }
     });
+    // Use server balance if available, otherwise computed total
+    const finalTotal = currentBalance > 0 ? currentBalance : total;
     return {
       week: { amount: week, orders: weekOrders },
       month: { amount: month, orders: monthOrders },
-      total: { amount: total, orders: totalOrders },
+      total: { amount: finalTotal, orders: totalOrders },
     };
-  }, [ledger]);
+  }, [ledger, currentBalance]);
 
   return (
     <View style={styles.container}>
