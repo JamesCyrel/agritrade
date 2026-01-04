@@ -233,7 +233,50 @@ export class AdminService {
   }
 
   async completePayout(payoutId: number, transactionRef?: string, payoutDate?: string) {
-    const res = await this.pool.query(`
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get payout details first
+      const payoutRes = await client.query(`
+            SELECT * FROM farmer_payouts
+            WHERE payout_id = $1
+        `, [payoutId]);
+
+      if (payoutRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const payout = payoutRes.rows[0];
+
+      // Create ledger entry for the payout (deduct from balance)
+      // Get current balance before this payout
+      const balanceRes = await client.query(`
+            SELECT COALESCE(SUM(
+              CASE WHEN transaction_type = 'EARNING' THEN amount ELSE -amount END
+            ), 0) as current_balance
+            FROM farmer_ledger
+            WHERE farmer_id = $1
+        `, [payout.farmer_id]);
+
+      const balanceBefore = parseFloat(balanceRes.rows[0]?.current_balance || 0);
+      const balanceAfter = balanceBefore - parseFloat(payout.net_amount);
+
+      // Insert ledger entry for the payout
+      await client.query(`
+            INSERT INTO farmer_ledger (farmer_id, amount, transaction_type, balance_before, balance_after, description, created_at)
+            VALUES ($1, $2, 'PAYOUT', $3, $4, $5, NOW())
+        `, [
+        payout.farmer_id,
+        parseFloat(payout.net_amount),
+        balanceBefore,
+        balanceAfter,
+        `Payout #${payoutId} completed`
+      ]);
+
+      // Update payout status
+      const updateRes = await client.query(`
             UPDATE farmer_payouts SET status = 'COMPLETED', 
                    transaction_reference = COALESCE($2, transaction_reference),
                    payout_date = COALESCE($3, CURRENT_DATE),
@@ -241,16 +284,74 @@ export class AdminService {
             WHERE payout_id = $1 AND status IN ('PENDING', 'PROCESSING')
             RETURNING *
         `, [payoutId, transactionRef || null, payoutDate || null]);
-    return res.rows[0] || null;
+
+      await client.query('COMMIT');
+      return updateRes.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async rejectPayout(payoutId: number, reason?: string) {
-    const res = await this.pool.query(`
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Get payout details first
+      const payoutRes = await client.query(`
+            SELECT * FROM farmer_payouts
+            WHERE payout_id = $1
+        `, [payoutId]);
+
+      if (payoutRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      const payout = payoutRes.rows[0];
+
+      // Create ledger entry to reverse the payout (add back to balance)
+      const balanceRes = await client.query(`
+            SELECT COALESCE(SUM(
+              CASE WHEN transaction_type = 'EARNING' THEN amount ELSE -amount END
+            ), 0) as current_balance
+            FROM farmer_ledger
+            WHERE farmer_id = $1
+        `, [payout.farmer_id]);
+
+      const balanceBefore = parseFloat(balanceRes.rows[0]?.current_balance || 0);
+      const balanceAfter = balanceBefore + parseFloat(payout.net_amount);
+
+      // Insert ledger entry to reverse/restore the balance
+      await client.query(`
+            INSERT INTO farmer_ledger (farmer_id, amount, transaction_type, balance_before, balance_after, description, created_at)
+            VALUES ($1, $2, 'PAYOUT_REVERSAL', $3, $4, $5, NOW())
+        `, [
+        payout.farmer_id,
+        parseFloat(payout.net_amount),
+        balanceBefore,
+        balanceAfter,
+        `Payout #${payoutId} rejected${reason ? `: ${reason}` : ''}`
+      ]);
+
+      // Update payout status
+      const updateRes = await client.query(`
             UPDATE farmer_payouts SET status = 'FAILED', updated_at = NOW()
             WHERE payout_id = $1 AND status IN ('PENDING', 'PROCESSING')
             RETURNING *
         `, [payoutId]);
-    return res.rows[0] || null;
+
+      await client.query('COMMIT');
+      return updateRes.rows[0] || null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   // ===================== Analytics =====================
