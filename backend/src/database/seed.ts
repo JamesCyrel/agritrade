@@ -7,7 +7,7 @@ dotenv.config();
 
 async function seed() {
     const pool = new Pool({
-        connectionString: process.env.SUPABASE_DB_URL,
+        connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
     });
 
     console.log('🌱 Starting database seeding...\n');
@@ -16,10 +16,31 @@ async function seed() {
         // Hash password for all test users
         const passwordHash = await bcrypt.hash('password123', 10);
 
-        // Clear existing data (optional - comment out if you want to preserve data)
+        // Clear existing data in correct order (respecting foreign key constraints)
         console.log('🗑️  Clearing existing data...');
+        await pool.query('DELETE FROM reviews');
+        await pool.query('DELETE FROM disputes');
+        await pool.query('DELETE FROM notifications');
+        await pool.query('DELETE FROM payment_transactions');
+        await pool.query('DELETE FROM order_rejections');
+        await pool.query('DELETE FROM order_items');
+        await pool.query('DELETE FROM farmer_ledger');
+        await pool.query('DELETE FROM farmer_payouts');
+        await pool.query('DELETE FROM orders');
+        await pool.query('DELETE FROM cart_items');
+        await pool.query('DELETE FROM consumer_favorites');
+        await pool.query('DELETE FROM favorites');
+        await pool.query('DELETE FROM product_images');
+        await pool.query('DELETE FROM product_sack_sizes');
         await pool.query('DELETE FROM products');
+        await pool.query('DELETE FROM consumer_addresses');
+        await pool.query('DELETE FROM verification_documents');
         await pool.query('DELETE FROM profiles');
+        await pool.query('DELETE FROM cod_eligibility');
+        await pool.query('DELETE FROM cod_settings');
+        await pool.query('DELETE FROM featured_farmers');
+        await pool.query('DELETE FROM commission_settings');
+        await pool.query('DELETE FROM delivery_fee_settings');
         await pool.query('DELETE FROM users');
 
         // Seed Admin User
@@ -134,12 +155,30 @@ async function seed() {
             );
         }
 
+        // Seed Platform Settings (CRITICAL - app will fail without these)
+        console.log('⚙️  Creating platform settings...');
+        
+        // Commission Settings (5% platform fee)
+        await pool.query(
+            `INSERT INTO commission_settings (commission_rate, min_commission, updated_at) 
+             VALUES ($1, $2, CURRENT_TIMESTAMP)`,
+            [5.00, 0]
+        );
+
+        // Delivery Fee Settings
+        await pool.query(
+            `INSERT INTO delivery_fee_settings (base_fee, price_per_km, max_fee, min_fee, updated_at) 
+             VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+            [20.00, 5.00, 200.00, 20.00]
+        );
+
         console.log('\n✅ Database seeding completed successfully!\n');
         console.log('📋 Summary:');
         console.log('   - 1 Admin user');
         console.log('   - 3 Farmer users (with profiles)');
         console.log('   - 2 Consumer users (with addresses)');
         console.log('   - 6 Products (with images and sack sizes)');
+        console.log('   - Platform settings (commission & delivery fees)');
         console.log('\n🔑 All test users have password: password123');
         console.log('\n📧 Test accounts:');
         console.log('   Admin:    admin@agritrade.com');
