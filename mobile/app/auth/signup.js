@@ -70,7 +70,7 @@ export default function SignupScreen() {
 
         // If farmer, go to profile setup immediately
         if (response.data.user.role === 'FARMER') {
-          router.replace('/farmer/profile');
+          router.replace('/farmer/profile-setup');
           return;
         }
         // Otherwise default
