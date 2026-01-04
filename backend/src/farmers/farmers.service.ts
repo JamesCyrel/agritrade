@@ -167,17 +167,21 @@ export class FarmersService implements OnModuleInit {
                    u.email as consumer_email, u.phone as consumer_phone,
                    p.full_name as consumer_name,
                    ca.full_address, ca.city, ca.state, ca.postal_code,
-                   (SELECT json_agg(json_build_object(
-                       'order_item_id', oi.order_item_id,
-                       'product_id', oi.product_id,
-                       'quantity', oi.quantity,
-                       'unit_price', oi.unit_price,
-                       'subtotal', oi.subtotal,
-                       'variety_name', pr.variety_name,
-                       'rice_type', pr.rice_type
-                   )) FROM order_items oi 
-                   LEFT JOIN products pr ON oi.product_id = pr.product_id 
-                   WHERE oi.order_id = o.order_id) as items
+                   COALESCE(
+                       (SELECT json_agg(json_build_object(
+                           'order_item_id', oi.order_item_id,
+                           'product_id', oi.product_id,
+                           'quantity', oi.quantity,
+                           'unit_price', oi.unit_price,
+                           'subtotal', oi.subtotal,
+                           'name', pr.variety_name,
+                           'variety_name', pr.variety_name,
+                           'rice_type', pr.rice_type
+                       )) FROM order_items oi 
+                       LEFT JOIN products pr ON oi.product_id = pr.product_id 
+                       WHERE oi.order_id = o.order_id),
+                       '[]'::json
+                   ) as items
             FROM orders o
             LEFT JOIN users u ON o.user_id = u.user_id
             LEFT JOIN profiles p ON o.user_id = p.user_id

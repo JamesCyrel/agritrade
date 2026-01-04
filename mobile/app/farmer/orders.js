@@ -218,12 +218,15 @@ function OrderCard({ order, onPress }) {
       try {
         items = JSON.parse(order.items);
       } catch (e) {
+        console.log('Failed to parse items:', order.items);
         items = [];
       }
     } else if (Array.isArray(order.items)) {
       items = order.items;
     }
   }
+
+  console.log('Order:', order.order_id, 'Items:', items);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -257,21 +260,30 @@ function OrderCard({ order, onPress }) {
     return "Customer";
   };
 
-  // Shorten order number for display
-  const shortenOrderNumber = (orderNumber) => {
-    if (!orderNumber) return "N/A";
-    // Show first 8 chars and last 4 chars if too long
-    if (orderNumber.length > 20) {
-      return `${orderNumber.substring(0, 8)}...${orderNumber.substring(orderNumber.length - 4)}`;
+  // Get product names from order items
+  const getProductNames = () => {
+    if (!items || items.length === 0) {
+      // If no items, try to use product_name or product_names from order
+      if (order.product_names) return order.product_names;
+      if (order.product_name) return order.product_name;
+      return "Rice Order";
     }
-    return orderNumber;
+    
+    const names = items
+      .filter(item => item && (item.name || item.variety_name || item.product_name))
+      .map(item => item.name || item.variety_name || item.product_name);
+    
+    if (names.length === 0) return "Rice Order";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return names.join(" & ");
+    return `${names[0]} & ${names.length - 1} more`;
   };
 
   return (
     <TouchableOpacity style={styles.orderCard} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.orderCardHeader}>
         <View style={styles.orderCardLeft}>
-          <Text style={styles.orderNumber}>{shortenOrderNumber(order.order_number)}</Text>
+          <Text style={styles.orderNumber}>{getProductNames()}</Text>
           <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
