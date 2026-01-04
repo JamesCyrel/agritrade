@@ -128,14 +128,12 @@ export default function AdminHomeScreen() {
                 <Text style={styles.statNumber}>{formatCurrency(analytics.platformRevenue || 0)}</Text>
                 <Text style={styles.statLabel}>Platform Revenue</Text>
               </View>
-              {analytics.orders?.total_orders > 0 && (
-                <View style={styles.statCard}>
-                  <Text style={styles.statNumber}>
-                    {formatCurrency((analytics.gmv || 0) / analytics.orders.total_orders)}
-                  </Text>
-                  <Text style={styles.statLabel}>Avg Order Value</Text>
-                </View>
-              )}
+              <View style={styles.statCard}>
+                <Text style={styles.statNumber}>
+                  {formatCurrency(analytics.avgOrderValue || 0)}
+                </Text>
+                <Text style={styles.statLabel}>Avg Order Value</Text>
+              </View>
             </View>
 
             {/* User Registrations by Role */}
@@ -160,14 +158,12 @@ export default function AdminHomeScreen() {
                 <Text style={styles.metricLabel}>Cancelled Orders</Text>
                 <Text style={styles.metricValue}>{analytics.orders?.cancelled_orders || 0}</Text>
               </View>
-              {analytics.orders?.total_orders > 0 && (
-                <View style={styles.metricCard}>
-                  <Text style={styles.metricLabel}>Average Order Value</Text>
-                  <Text style={styles.metricValue}>
-                    {formatCurrency((analytics.gmv || 0) / analytics.orders.total_orders)}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.metricCard}>
+                <Text style={styles.metricLabel}>Average Order Value</Text>
+                <Text style={styles.metricValue}>
+                  {formatCurrency(analytics.avgOrderValue || 0)}
+                </Text>
+              </View>
             </View>
 
             {/* Top Products */}

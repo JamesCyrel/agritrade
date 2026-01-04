@@ -356,47 +356,107 @@ export class AdminService {
 
   // ===================== Analytics =====================
   async getAnalytics(startDate?: string, endDate?: string) {
-    const start = startDate || new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0];
-    const end = endDate || new Date().toISOString().split('T')[0];
+    // If no date range provided, query all-time data (no date filter)
+    const useAllTime = !startDate && !endDate;
+    const start = startDate || (useAllTime ? null : new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().split('T')[0]);
+    const end = endDate || (useAllTime ? null : new Date().toISOString().split('T')[0]);
 
-    const [ordersRes, usersRes, revenueRes, topProductsRes] = await Promise.all([
+    const dateFilter = useAllTime ? '' : 'AND created_at BETWEEN $1 AND $2';
+    const dateParams = useAllTime ? [] : [start, end];
+
+    const [ordersRes, usersRes, gmbRes, topProductsRes, topFarmersRes, userRegRes, completedOrdersRes] = await Promise.all([
       this.pool.query(`
                 SELECT 
                     COUNT(*) as total_orders,
                     COUNT(*) FILTER (WHERE status = 'DELIVERED') as delivered_orders,
                     COUNT(*) FILTER (WHERE status = 'PENDING') as pending_orders,
-                    COUNT(*) FILTER (WHERE status = 'CANCELLED' OR status = 'REJECTED') as cancelled_orders
-                FROM orders WHERE created_at BETWEEN $1 AND $2
-            `, [start, end]),
+                    COUNT(*) FILTER (WHERE status = 'CANCELLED' OR status = 'REJECTED') as cancelled_orders,
+                    COUNT(*) FILTER (WHERE status = 'DELIVERED') as completed_orders
+                FROM orders ${useAllTime ? '' : 'WHERE created_at BETWEEN $1 AND $2'}
+            `, dateParams),
       this.pool.query(`
                 SELECT 
                     COUNT(*) as total_users,
                     COUNT(*) FILTER (WHERE role = 'CONSUMER') as consumers,
                     COUNT(*) FILTER (WHERE role = 'FARMER') as farmers
-                FROM users WHERE created_at BETWEEN $1 AND $2
-            `, [start, end]),
+                FROM users ${useAllTime ? '' : 'WHERE created_at BETWEEN $1 AND $2'}
+            `, dateParams),
+      // GMV (Gross Merchandise Value) = Total value of all delivered orders
+      // Platform Revenue = Sum of all commission amounts from completed payouts
       this.pool.query(`
-                SELECT COALESCE(SUM(total_amount), 0) as total_revenue
-                FROM orders WHERE status = 'DELIVERED' AND created_at BETWEEN $1 AND $2
-            `, [start, end]),
+                SELECT 
+                    COALESCE(SUM(total_amount), 0) as gmv,
+                    (SELECT COALESCE(SUM(commission_amount), 0) 
+                     FROM farmer_payouts 
+                     WHERE status = 'COMPLETED' 
+                     ${useAllTime ? '' : 'AND created_at BETWEEN $1 AND $2'}) as platform_revenue
+                FROM orders 
+                WHERE status = 'DELIVERED' 
+                ${useAllTime ? '' : 'AND created_at BETWEEN $1 AND $2'}
+            `, dateParams),
+      // Top products by revenue
       this.pool.query(`
-                SELECT pr.variety_name, SUM(oi.quantity) as total_sold
+                SELECT 
+                    pr.product_id,
+                    pr.variety_name, 
+                    pr.rice_type,
+                    SUM(oi.quantity) as total_quantity_sold,
+                    SUM(oi.subtotal) as total_revenue
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.order_id
                 JOIN products pr ON oi.product_id = pr.product_id
-                WHERE o.status = 'DELIVERED' AND o.created_at BETWEEN $1 AND $2
-                GROUP BY pr.variety_name
-                ORDER BY total_sold DESC
+                WHERE o.status = 'DELIVERED' ${useAllTime ? '' : 'AND o.created_at BETWEEN $1 AND $2'}
+                GROUP BY pr.product_id, pr.variety_name, pr.rice_type
+                ORDER BY total_revenue DESC
                 LIMIT 10
-            `, [start, end])
+            `, dateParams),
+      // Top farmers by revenue
+      this.pool.query(`
+                SELECT 
+                    u.user_id as farmer_id,
+                    p.full_name as farmer_name,
+                    p.farm_name,
+                    COUNT(o.order_id) as total_orders,
+                    SUM(o.total_amount) as total_revenue
+                FROM orders o
+                JOIN users u ON o.farmer_id = u.user_id
+                LEFT JOIN profiles p ON u.user_id = p.user_id
+                WHERE o.status = 'DELIVERED' ${useAllTime ? '' : 'AND o.created_at BETWEEN $1 AND $2'}
+                GROUP BY u.user_id, p.full_name, p.farm_name
+                ORDER BY total_revenue DESC
+                LIMIT 10
+            `, dateParams),
+      // User registrations by role
+      this.pool.query(`
+                SELECT role, COUNT(*) as count
+                FROM users
+                ${useAllTime ? '' : 'WHERE created_at BETWEEN $1 AND $2'}
+                GROUP BY role
+            `, dateParams),
+      // Completed orders (for calculating average order value)
+      this.pool.query(`
+                SELECT COUNT(*) as count, COALESCE(SUM(total_amount), 0) as total
+                FROM orders
+                WHERE status = 'DELIVERED' ${useAllTime ? '' : 'AND created_at BETWEEN $1 AND $2'}
+            `, dateParams)
     ]);
+
+    const ordersData = ordersRes.rows[0];
+    const gmbData = gmbRes.rows[0];
+    const completedOrders = completedOrdersRes.rows[0];
 
     return {
       period: { start, end },
-      orders: ordersRes.rows[0],
+      orders: ordersData,
       users: usersRes.rows[0],
-      revenue: revenueRes.rows[0],
-      top_products: topProductsRes.rows
+      gmv: parseFloat(gmbData.gmv || 0),
+      platformRevenue: parseFloat(gmbData.platform_revenue || 0),
+      revenue: parseFloat(gmbData.gmv || 0), // Keep for backward compatibility
+      avgOrderValue: completedOrders.count > 0 ? parseFloat(completedOrders.total) / parseInt(completedOrders.count) : 0,
+      top_products: topProductsRes.rows,
+      popularProducts: topProductsRes.rows,
+      topFarmers: topFarmersRes.rows,
+      userRegistrations: userRegRes.rows
     };
   }
 
