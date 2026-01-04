@@ -13,7 +13,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI, getImageUrl } from "../../services/api";
-import { Wheat, Heart, Star } from "lucide-react-native";
+import { Wheat, Heart, Star, User, Tractor } from "lucide-react-native";
 
 export default function ConsumerHomeScreen() {
   const router = useRouter();
@@ -167,7 +167,7 @@ export default function ConsumerHomeScreen() {
         onPress={() => router.push(`/consumer/farmers/${farmer.farmer_id}/storefront`)}
       >
         <View style={styles.cardImage}>
-          <Text style={styles.cardImagePlaceholder}>🚜</Text>
+          <Tractor size={40} color="#2d5016" />
         </View>
         <Text style={styles.cardTitle} numberOfLines={1}>
           {farmerName}
@@ -178,9 +178,12 @@ export default function ConsumerHomeScreen() {
           </Text>
         )}
         {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
-          <Text style={styles.cardRating}>
-            ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Star size={14} color="#f1c40f" fill="#f1c40f" />
+            <Text style={styles.cardRating}>
+              {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
+            </Text>
+          </View>
         )}
         <Text style={styles.cardProducts}>{String(productCount)} products</Text>
       </TouchableOpacity>
@@ -200,8 +203,8 @@ export default function ConsumerHomeScreen() {
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>AgriTrade</Text>
-          <TouchableOpacity onPress={() => router.push("/consumer/profile")}>
-            <Text style={styles.headerIcon}>👤</Text>
+          <TouchableOpacity onPress={() => router.push("/consumer/profile")} style={styles.profileIconContainer}>
+            <User size={24} color="#2d5016" />
           </TouchableOpacity>
         </View>
         <Text style={styles.headerSubtitle}>Fresh Rice, Direct from Farmers</Text>

@@ -389,20 +389,11 @@ export class ConsumerService implements OnModuleInit {
             );
             const order = orderRes.rows[0];
             
-            // Insert order items and update product stock
+            // Insert order items (stock deduction happens on delivery, not on order placement)
             for (const item of itemsWithPrices) {
                 await client.query(
                     `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)`,
                     [order.order_id, item.product_id, item.quantity, item.unitPrice, item.subtotal]
-                );
-                
-                // Subtract ordered quantity from product's available_quantity
-                const newQuantity = item.availableQty - parseFloat(item.quantity);
-                const newStatus = newQuantity <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE';
-                
-                await client.query(
-                    `UPDATE products SET available_quantity = $1, status = $2, updated_at = NOW() WHERE product_id = $3`,
-                    [Math.max(0, newQuantity), newStatus, item.product_id]
                 );
             }
             
@@ -458,6 +449,68 @@ export class ConsumerService implements OnModuleInit {
         );
         if (res.rowCount === 0) throw new NotFoundException('Order not found or cannot be cancelled');
         return res.rows[0];
+    }
+
+    async markOrderDelivered(userId: number, orderId: number) {
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            // Update order status to DELIVERED
+            const res = await client.query(
+                `UPDATE orders SET status = 'DELIVERED', updated_at = NOW() 
+                 WHERE order_id = $1 AND user_id = $2 AND status = 'CONFIRMED' 
+                 RETURNING *`,
+                [orderId, userId]
+            );
+            
+            if (res.rowCount === 0) {
+                throw new NotFoundException('Order not found or cannot be marked as delivered');
+            }
+            
+            const order = res.rows[0];
+            
+            // Get order items to update stock
+            const itemsRes = await client.query(
+                `SELECT oi.product_id, oi.quantity FROM order_items oi WHERE oi.order_id = $1`,
+                [orderId]
+            );
+            
+            // Subtract ordered quantity from product's available_quantity (deduct on delivery)
+            for (const item of itemsRes.rows) {
+                const productRes = await client.query(
+                    `SELECT available_quantity FROM products WHERE product_id = $1`,
+                    [item.product_id]
+                );
+                
+                if (productRes.rows.length > 0) {
+                    const currentQty = parseFloat(productRes.rows[0].available_quantity) || 0;
+                    const newQuantity = currentQty - parseFloat(item.quantity);
+                    const newStatus = newQuantity <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE';
+                    
+                    await client.query(
+                        `UPDATE products SET available_quantity = $1, status = $2, updated_at = NOW() WHERE product_id = $3`,
+                        [Math.max(0, newQuantity), newStatus, item.product_id]
+                    );
+                }
+            }
+            
+            // Create earnings ledger entry for the farmer
+            await client.query(
+                `INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, description)
+                 VALUES ($1, $2, $3, 'SALE', $4)
+                 ON CONFLICT DO NOTHING`,
+                [order.farmer_id, orderId, order.total_amount, `Order #${orderId} delivered`]
+            );
+            
+            await client.query('COMMIT');
+            return order;
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
     }
 
     // Favorites

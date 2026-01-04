@@ -171,38 +171,42 @@ export default function ProductsScreen() {
             </View>
 
             <View style={styles.productActions}>
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => router.push(`/farmer/products/create?id=${product.product_id}`)}
-              >
-                <Edit size={16} color="#2d5016" style={{ marginRight: 4 }} />
-                <Text style={styles.actionButtonText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.inventoryButton]}
-                onPress={() => router.push(`/farmer/products/inventory?id=${product.product_id}`)}
-              >
-                <Package size={16} color="#2d5016" style={{ marginRight: 4 }} />
-                <Text style={styles.actionButtonText}>Stock</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.toggleButton]}
-                onPress={() => handleToggleStatus(product)}
-                disabled={product.status === 'ARCHIVED'}
-              >
-                <Power size={16} color="#2d5016" style={{ marginRight: 4 }} />
-                <Text style={styles.actionButtonText}>
-                  {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.archiveButton]}
-                onPress={() => handleArchive(product)}
-                disabled={product.status === 'ARCHIVED'}
-              >
-                <Archive size={16} color="#d32f2f" style={{ marginRight: 4 }} />
-                <Text style={[styles.actionButtonText, styles.archiveButtonText]}>Archive</Text>
-              </TouchableOpacity>
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.editButton]}
+                  onPress={() => router.push(`/farmer/products/create?id=${product.product_id}`)}
+                >
+                  <Edit size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.stockButton]}
+                  onPress={() => router.push(`/farmer/products/inventory?id=${product.product_id}`)}
+                >
+                  <Package size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>Stock</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.toggleButton, product.status === 'ACTIVE' && styles.deactivateButton]}
+                  onPress={() => handleToggleStatus(product)}
+                  disabled={product.status === 'ARCHIVED'}
+                >
+                  <Power size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>
+                    {product.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.archiveButton]}
+                  onPress={() => handleArchive(product)}
+                  disabled={product.status === 'ARCHIVED'}
+                >
+                  <Archive size={18} color="#fff" />
+                  <Text style={styles.actionButtonText}>Archive</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         ))
@@ -251,11 +255,22 @@ const styles = StyleSheet.create({
   price: { fontSize: 20, fontWeight: "bold", color: "#2d5016", marginBottom: 4 },
   quantity: { fontSize: 14, color: "#666", marginBottom: 8 },
   description: { fontSize: 14, color: "#333", lineHeight: 20 },
-  productActions: { flexDirection: "row", gap: 8, marginTop: 8 },
-  actionButton: { flex: 1, backgroundColor: "#2d5016", borderRadius: 6, padding: 10, alignItems: "center" },
-  actionButtonText: { color: "#fff", fontSize: 12, fontWeight: "600" },
-  inventoryButton: { backgroundColor: "#17a2b8" },
-  toggleButton: { backgroundColor: "#ffc107" },
+  productActions: { marginTop: 12, gap: 8 },
+  actionRow: { flexDirection: "row", gap: 8 },
+  actionButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+  },
+  actionButtonText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  editButton: { backgroundColor: "#2d5016" },
+  stockButton: { backgroundColor: "#17a2b8" },
+  toggleButton: { backgroundColor: "#28a745" },
+  deactivateButton: { backgroundColor: "#ffc107" },
   archiveButton: { backgroundColor: "#6c757d" },
-  archiveButtonText: { color: "#fff" },
 });

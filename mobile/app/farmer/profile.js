@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Activi
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
-import { Wheat, Package, ClipboardList, DollarSign, Star } from "lucide-react-native";
+import { Wheat, Package, ClipboardList, DollarSign, Star, CheckCircle, Clock, AlertTriangle, XCircle } from "lucide-react-native";
 
 // Cross-platform alert helper
 const showAlert = (title, message, buttons) => {
@@ -184,12 +184,18 @@ export default function FarmerProfileScreen() {
 
       <View style={styles.statusCard}>
         <Text style={styles.statusLabel}>Verification Status</Text>
-        <Text style={styles.statusValue}>
-          {status === 'APPROVED' ? 'Approved ✅' :
-           status === 'PENDING_REVIEW' ? 'Pending Review ⏳' :
-           status === 'PENDING_DOCUMENTS' ? 'Documents Needed ⚠️' :
-           status === 'REJECTED' ? 'Rejected ❌' : 'Unknown'}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {status === 'APPROVED' && <CheckCircle size={18} color="#2ecc71" style={{ marginRight: 6 }} />}
+          {status === 'PENDING_REVIEW' && <Clock size={18} color="#f39c12" style={{ marginRight: 6 }} />}
+          {status === 'PENDING_DOCUMENTS' && <AlertTriangle size={18} color="#e67e22" style={{ marginRight: 6 }} />}
+          {status === 'REJECTED' && <XCircle size={18} color="#e74c3c" style={{ marginRight: 6 }} />}
+          <Text style={styles.statusValue}>
+            {status === 'APPROVED' ? 'Approved' :
+             status === 'PENDING_REVIEW' ? 'Pending Review' :
+             status === 'PENDING_DOCUMENTS' ? 'Documents Needed' :
+             status === 'REJECTED' ? 'Rejected' : 'Unknown'}
+          </Text>
+        </View>
         {reason ? <Text style={styles.reasonText}>Reason: {reason}</Text> : null}
       </View>
 

@@ -1,20 +1,33 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
+  RefreshControl,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Wheat, User } from "lucide-react-native";
+import { Wheat, User, UserCog, Search, X } from "lucide-react-native";
 import { adminAPI } from "../../services/api";
+
+const ROLE_FILTERS = [
+  { label: "All", value: "ALL" },
+  { label: "Farmers", value: "FARMER" },
+  { label: "Consumers", value: "CONSUMER" },
+  { label: "Admins", value: "ADMIN" },
+];
 
 export default function AdminUsersScreen() {
   const router = useRouter();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRole, setSelectedRole] = useState("ALL");
 
   const load = async () => {
     setLoading(true);
@@ -26,12 +39,120 @@ export default function AdminUsersScreen() {
       console.log(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   useEffect(() => {
     load();
   }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load();
+  };
+
+  const filteredUsers = useMemo(() => {
+    let result = users;
+    
+    // Filter by role
+    if (selectedRole !== "ALL") {
+      result = result.filter(u => u.role === selectedRole);
+    }
+    
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(u => 
+        (u.full_name && u.full_name.toLowerCase().includes(query)) ||
+        (u.farm_name && u.farm_name.toLowerCase().includes(query)) ||
+        (u.email && u.email.toLowerCase().includes(query)) ||
+        (u.phone && u.phone.includes(query))
+      );
+    }
+    
+    return result;
+  }, [users, selectedRole, searchQuery]);
+
+  const getRoleIcon = (role) => {
+    switch (role) {
+      case 'FARMER':
+        return <Wheat size={24} color="#2d5016" />;
+      case 'ADMIN':
+        return <UserCog size={24} color="#6366f1" />;
+      default:
+        return <User size={24} color="#666" />;
+    }
+  };
+
+  const getRoleBadgeStyle = (role) => {
+    switch (role) {
+      case 'FARMER':
+        return { backgroundColor: '#d4edda', color: '#155724' };
+      case 'ADMIN':
+        return { backgroundColor: '#e0e7ff', color: '#3730a3' };
+      default:
+        return { backgroundColor: '#e5e7eb', color: '#374151' };
+    }
+  };
+
+  const renderUserCard = (user, index) => {
+    const roleStyle = getRoleBadgeStyle(user.role);
+    
+    return (
+      <TouchableOpacity 
+        key={`${user.role}-${user.user_id}-${index}`} 
+        style={styles.userCard}
+        onPress={() => router.push(`/admin/users/${user.user_id}`)}
+      >
+        <View style={styles.userHeader}>
+          <View style={styles.avatarContainer}>
+            {getRoleIcon(user.role)}
+          </View>
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>
+              {user.farm_name || user.full_name || user.email || user.phone || `User #${user.user_id}`}
+            </Text>
+            <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
+            <View style={[styles.roleBadge, { backgroundColor: roleStyle.backgroundColor }]}>
+              <Text style={[styles.roleText, { color: roleStyle.color }]}>{user.role}</Text>
+            </View>
+          </View>
+          {user.role === 'FARMER' && (
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    user.verification_status === 'APPROVED'
+                      ? '#d4edda'
+                      : user.verification_status === 'REJECTED'
+                      ? '#fee'
+                      : '#fff3cd',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color:
+                      user.verification_status === 'APPROVED'
+                        ? '#155724'
+                        : user.verification_status === 'REJECTED'
+                        ? '#dc3545'
+                        : '#856404',
+                  },
+                ]}
+              >
+                {user.verification_status || 'N/A'}
+              </Text>
+            </View>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -40,116 +161,74 @@ export default function AdminUsersScreen() {
         <Text style={styles.headerSubtitle}>Manage users, verify farmers</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      {/* Sticky Search and Filters */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchInputContainer}>
+          <Search size={20} color="#666" style={styles.searchIcon} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search by name, email, or phone..."
+            placeholderTextColor="#999"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery("")} style={styles.clearButton}>
+              <X size={18} color="#666" />
+            </TouchableOpacity>
+          )}
+        </View>
+        
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          style={styles.filterTabs}
+          contentContainerStyle={styles.filterTabsContent}
+        >
+          {ROLE_FILTERS.map((filter) => (
+            <TouchableOpacity
+              key={filter.value}
+              style={[
+                styles.filterTab,
+                selectedRole === filter.value && styles.filterTabActive,
+              ]}
+              onPress={() => setSelectedRole(filter.value)}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  selectedRole === filter.value && styles.filterTabTextActive,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <ScrollView 
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         {loading ? (
-          <Text style={{ color: "#666" }}>Loading...</Text>
-        ) : users.length === 0 ? (
-          <Text style={{ color: "#666" }}>No users found.</Text>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#2d5016" />
+          </View>
+        ) : filteredUsers.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <User size={48} color="#ccc" />
+            <Text style={styles.emptyText}>No users found</Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery ? "Try a different search term" : "No users match the selected filter"}
+            </Text>
+          </View>
         ) : (
           <View>
-            {/* Farmers */}
-            <Text style={styles.groupTitle}>Farmers</Text>
-            {users.filter(u => u.role === 'FARMER').length === 0 ? (
-              <Text style={styles.emptyGroup}>No farmers.</Text>
-            ) : (
-              users.filter(u => u.role === 'FARMER').map((user, index) => (
-                <TouchableOpacity 
-                  key={`F-${user.user_id}-${index}`} 
-                  style={styles.userCard}
-                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
-                >
-                  <View style={styles.userHeader}>
-                    <View style={styles.avatarContainer}>
-                      <Wheat size={24} color="#2d5016" />
-                    </View>
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{user.farm_name || user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
-                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
-                      <Text style={styles.userRole}>{user.role}</Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.statusBadge,
-                        {
-                          backgroundColor:
-                            user.verification_status === 'APPROVED'
-                              ? '#d4edda'
-                              : user.verification_status === 'REJECTED'
-                              ? '#fee'
-                              : '#fff3cd',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.statusText,
-                          {
-                            color:
-                              user.verification_status === 'APPROVED'
-                                ? '#155724'
-                                : user.verification_status === 'REJECTED'
-                                ? '#dc3545'
-                                : '#856404',
-                          },
-                        ]}
-                      >
-                        {user.verification_status || 'N/A'}
-                      </Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-
-            {/* Consumers */}
-            <Text style={styles.groupTitle}>Consumers</Text>
-            {users.filter(u => u.role === 'CONSUMER').length === 0 ? (
-              <Text style={styles.emptyGroup}>No consumers.</Text>
-            ) : (
-              users.filter(u => u.role === 'CONSUMER').map((user, index) => (
-                <TouchableOpacity 
-                  key={`C-${user.user_id}-${index}`} 
-                  style={styles.userCard}
-                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
-                >
-                  <View style={styles.userHeader}>
-                    <View style={styles.avatarContainer}>
-                      <User size={24} color="#666" />
-                    </View>
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
-                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
-                      <Text style={styles.userRole}>{user.role}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
-
-            {/* Admins */}
-            <Text style={styles.groupTitle}>Admins</Text>
-            {users.filter(u => u.role === 'ADMIN').length === 0 ? (
-              <Text style={styles.emptyGroup}>No admins.</Text>
-            ) : (
-              users.filter(u => u.role === 'ADMIN').map((user, index) => (
-                <TouchableOpacity 
-                  key={`A-${user.user_id}-${index}`} 
-                  style={styles.userCard}
-                  onPress={() => router.push(`/admin/users/${user.user_id}`)}
-                >
-                  <View style={styles.userHeader}>
-                    <View style={styles.avatarContainer}>
-                      <User size={24} color="#666" />
-                    </View>
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{user.full_name || user.email || user.phone || `User #${user.user_id}`}</Text>
-                      <Text style={styles.userEmail}>{user.email || user.phone || '-'}</Text>
-                      <Text style={styles.userRole}>{user.role}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-              ))
-            )}
+            <Text style={styles.resultCount}>
+              {filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''} found
+            </Text>
+            {filteredUsers.map(renderUserCard)}
           </View>
         )}
       </ScrollView>
@@ -166,7 +245,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#2d5016",
     padding: 20,
     paddingTop: 50,
-    paddingBottom: 20,
+    paddingBottom: 16,
   },
   headerTitle: {
     fontSize: 24,
@@ -178,26 +257,86 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#e0e0e0",
   },
+  searchContainer: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f5f5f5",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#333",
+  },
+  clearButton: {
+    padding: 4,
+  },
+  filterTabs: {
+    marginTop: 12,
+  },
+  filterTabsContent: {
+    gap: 8,
+  },
+  filterTab: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "#f0f0f0",
+    marginRight: 8,
+  },
+  filterTabActive: {
+    backgroundColor: "#2d5016",
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#666",
+  },
+  filterTabTextActive: {
+    color: "#fff",
+  },
   content: {
     flex: 1,
     padding: 16,
   },
-  sectionTitle: {
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  emptyText: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#333",
-    marginBottom: 12,
-  },
-  groupTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#2d5016",
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  emptyGroup: {
     color: "#666",
+    marginTop: 16,
     marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#999",
+    textAlign: "center",
+  },
+  resultCount: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 12,
   },
   userCard: {
     backgroundColor: "#fff",
@@ -223,9 +362,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 12,
   },
-  avatar: {
-    fontSize: 24,
-  },
   userInfo: {
     flex: 1,
   },
@@ -238,12 +374,17 @@ const styles = StyleSheet.create({
   userEmail: {
     fontSize: 12,
     color: "#666",
-    marginBottom: 4,
+    marginBottom: 6,
   },
-  userRole: {
-    fontSize: 12,
-    color: "#2d5016",
-    fontWeight: "500",
+  roleBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  roleText: {
+    fontSize: 11,
+    fontWeight: "600",
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -251,7 +392,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "600",
   },
 });

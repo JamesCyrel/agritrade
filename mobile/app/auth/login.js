@@ -36,7 +36,7 @@ export default function LoginScreen() {
     // Validation
     if (!email.trim()) {
       showAlert(
-        "⚠️ Missing Information",
+        "Missing Information",
         "Please enter your email or phone number to continue.",
         [{ text: "OK", style: "default" }]
       );
@@ -45,7 +45,7 @@ export default function LoginScreen() {
 
     if (!password.trim()) {
       showAlert(
-        "⚠️ Missing Password",
+        "Missing Password",
         "Please enter your password to continue.",
         [{ text: "OK", style: "default" }]
       );
@@ -78,17 +78,17 @@ export default function LoginScreen() {
       } else {
         // Determine error type for better messaging
         const errorMessage = response.message || "";
-        let title = "❌ Login Failed";
+        let title = "Login Failed";
         let message = "Invalid email/phone or password. Please try again.";
 
         if (errorMessage.toLowerCase().includes('password')) {
-          title = "🔒 Invalid Password";
+          title = "Invalid Password";
           message = "The password you entered is incorrect. Please check your password and try again.";
         } else if (errorMessage.toLowerCase().includes('user') || errorMessage.toLowerCase().includes('not found')) {
-          title = "👤 Account Not Found";
+          title = "Account Not Found";
           message = "No account found with this email/phone number. Please check your credentials or sign up for a new account.";
         } else if (errorMessage.toLowerCase().includes('email') || errorMessage.toLowerCase().includes('phone')) {
-          title = "📧 Invalid Email/Phone";
+          title = "Invalid Email/Phone";
           message = "The email or phone number you entered is invalid. Please check and try again.";
         }
 

@@ -149,6 +149,12 @@ export class ConsumerController {
         return { success: true, message: 'Order cancelled', data: order };
     }
 
+    @Post('orders/:id/delivered')
+    async markOrderDelivered(@Request() req, @Param('id') id: string) {
+        const order = await this.consumerService.markOrderDelivered(req.user.userId, parseInt(id));
+        return { success: true, message: 'Order marked as delivered', data: order };
+    }
+
     // Favorites
     @Get('favorites')
     async getFavorites(@Request() req) {

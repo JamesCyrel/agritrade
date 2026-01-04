@@ -359,19 +359,8 @@ export default function CreateProductScreen() {
           placeholder="0"
           keyboardType="decimal-pad"
         />
-        <View style={styles.unitButtons}>
-          <TouchableOpacity
-            style={[styles.unitButton, quantityUnit === "KG" && styles.unitButtonActive]}
-            onPress={() => setQuantityUnit("KG")}
-          >
-            <Text style={[styles.unitButtonText, quantityUnit === "KG" && styles.unitButtonTextActive]}>KG</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.unitButton, quantityUnit === "SACKS" && styles.unitButtonActive]}
-            onPress={() => setQuantityUnit("SACKS")}
-          >
-            <Text style={[styles.unitButtonText, quantityUnit === "SACKS" && styles.unitButtonTextActive]}>SACKS</Text>
-          </TouchableOpacity>
+        <View style={styles.unitBadge}>
+          <Text style={styles.unitText}>KG</Text>
         </View>
       </View>
 
@@ -480,6 +469,8 @@ const styles = StyleSheet.create({
   radioLabel: { fontSize: 14, color: "#333" },
   quantityRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
   quantityInput: { flex: 1, marginRight: 8 },
+  unitBadge: { backgroundColor: "#2d5016", paddingHorizontal: 16, paddingVertical: 12, borderRadius: 8 },
+  unitText: { color: "#fff", fontSize: 14, fontWeight: "600" },
   unitButtons: { flexDirection: "row", gap: 8 },
   unitButton: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 6, backgroundColor: "#fff", borderWidth: 1, borderColor: "#ddd" },
   unitButtonActive: { backgroundColor: "#2d5016", borderColor: "#2d5016" },

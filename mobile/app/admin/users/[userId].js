@@ -11,6 +11,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { adminAPI } from "../../../services/api";
+import { Wheat, UserCog, User } from "lucide-react-native";
 
 export default function UserDetailScreen() {
   const router = useRouter();
@@ -142,9 +143,13 @@ export default function UserDetailScreen() {
         {/* User Info Card */}
         <View style={styles.card}>
           <View style={styles.avatarContainer}>
-            <Text style={styles.avatar}>
-              {user.role === "FARMER" ? "🌾" : user.role === "ADMIN" ? "👨‍💼" : "👤"}
-            </Text>
+            {user.role === "FARMER" ? (
+              <Wheat size={40} color="#2d5016" />
+            ) : user.role === "ADMIN" ? (
+              <UserCog size={40} color="#2d5016" />
+            ) : (
+              <User size={40} color="#2d5016" />
+            )}
           </View>
           <Text style={styles.name}>
             {user.farm_name || user.full_name || user.email || `User #${user.user_id}`}

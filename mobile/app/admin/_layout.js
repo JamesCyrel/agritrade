@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Home, Package, CheckCircle, Users, DollarSign, User } from "lucide-react-native";
 
@@ -11,14 +11,24 @@ export default function AdminLayout() {
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: "#2d5016",
-        tabBarInactiveTintColor: "#666",
+        tabBarInactiveTintColor: "#888",
+        tabBarActiveBackgroundColor: "#e8f5e9",
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+        },
+        tabBarItemStyle: {
+          borderRadius: 12,
+          marginHorizontal: 4,
+          marginVertical: 4,
+        },
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopWidth: 1,
           borderTopColor: "#ddd",
-          paddingBottom: Math.max(insets.bottom, 8),
-          paddingTop: 8,
-          height: 60 + Math.max(insets.bottom, 8),
+          paddingBottom: Math.max(insets.bottom, 4),
+          paddingTop: 4,
+          height: 64 + Math.max(insets.bottom, 4),
         },
       }}
     >

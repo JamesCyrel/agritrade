@@ -11,7 +11,7 @@ import {
 import { useFocusEffect, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerOrderAPI } from "../../services/api";
-import { ClipboardList, Clock, CheckCircle, Truck, PartyPopper, XCircle } from "lucide-react-native";
+import { ClipboardList, Clock, CheckCircle, Truck, PartyPopper, XCircle, User, MapPin, Package, Banknote, CreditCard } from "lucide-react-native";
 
 const ORDER_STATUSES = {
   PENDING: "PENDING",
@@ -283,13 +283,13 @@ function OrderCard({ order, onPress }) {
 
       <View style={styles.orderCardBody}>
         <View style={styles.orderInfoRow}>
-          <Text style={styles.orderInfoIcon}>👤</Text>
+          <User size={16} color="#666" style={{ marginRight: 8 }} />
           <Text style={styles.orderInfoText} numberOfLines={1}>{getConsumerName()}</Text>
         </View>
         
         {order.delivery_address && (
           <View style={styles.orderInfoRow}>
-            <Text style={styles.orderInfoIcon}>📍</Text>
+            <MapPin size={16} color="#666" style={{ marginRight: 8 }} />
             <Text style={styles.orderInfoText} numberOfLines={1}>
               {order.delivery_address}
             </Text>
@@ -297,7 +297,7 @@ function OrderCard({ order, onPress }) {
         )}
         
         <View style={styles.orderInfoRow}>
-          <Text style={styles.orderInfoIcon}>📦</Text>
+          <Package size={16} color="#666" style={{ marginRight: 8 }} />
           <Text style={styles.orderInfoText}>
             {items.length || 0} {items.length === 1 ? "item" : "items"}
           </Text>
@@ -310,9 +310,11 @@ function OrderCard({ order, onPress }) {
           <Text style={styles.orderTotal}>₱{parseFloat(order.total_amount || 0).toFixed(2)}</Text>
         </View>
         <View style={styles.paymentBadge}>
-          <Text style={styles.paymentIcon}>
-            {order.payment_type === "COD" ? "💰" : "💳"}
-          </Text>
+          {order.payment_type === "COD" ? (
+            <Banknote size={16} color="#2d5016" style={{ marginRight: 4 }} />
+          ) : (
+            <CreditCard size={16} color="#2d5016" style={{ marginRight: 4 }} />
+          )}
           <Text style={styles.paymentType}>
             {order.payment_type === "COD" ? "COD" : "Digital"}
           </Text>

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIn
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI } from "../../services/api";
 import { useRouter } from "expo-router";
+import { CheckCircle, Clock, AlertTriangle, XCircle } from "lucide-react-native";
 
 export default function FarmerVerification() {
   const router = useRouter();
@@ -55,14 +56,16 @@ export default function FarmerVerification() {
     }
   };
 
-  const statusText = () => {
-    if (!status) return 'Unknown';
-    if (status === 'APPROVED') return 'Approved ✅';
-    if (status === 'PENDING_REVIEW') return 'Pending Review ⏳';
-    if (status === 'PENDING_DOCUMENTS') return 'Documents Needed ⚠️';
-    if (status === 'REJECTED') return `Rejected ❌`;
-    return status;
+  const getStatusDisplay = () => {
+    if (!status) return { icon: null, text: 'Unknown' };
+    if (status === 'APPROVED') return { icon: <CheckCircle size={18} color="#2ecc71" />, text: 'Approved' };
+    if (status === 'PENDING_REVIEW') return { icon: <Clock size={18} color="#f39c12" />, text: 'Pending Review' };
+    if (status === 'PENDING_DOCUMENTS') return { icon: <AlertTriangle size={18} color="#e67e22" />, text: 'Documents Needed' };
+    if (status === 'REJECTED') return { icon: <XCircle size={18} color="#e74c3c" />, text: 'Rejected' };
+    return { icon: null, text: status };
   };
+
+  const statusDisplay = getStatusDisplay();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -71,7 +74,10 @@ export default function FarmerVerification() {
 
       <View style={styles.statusCard}>
         <Text style={styles.statusLabel}>Current Status</Text>
-        <Text style={styles.statusValue}>{statusText()}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          {statusDisplay.icon && <View style={{ marginRight: 6 }}>{statusDisplay.icon}</View>}
+          <Text style={styles.statusValue}>{statusDisplay.text}</Text>
+        </View>
         {reason ? <Text style={styles.reasonText}>Reason: {reason}</Text> : null}
       </View>
 

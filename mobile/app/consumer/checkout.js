@@ -237,7 +237,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  const deliveryFee = 50;
+  const deliveryFee = 20;
   const discountAmount = appliedPromo?.discount_amount || 0;
   const subtotalAfterDiscount = cartData.subtotal - discountAmount;
   const tax = subtotalAfterDiscount * 0.12;
@@ -335,7 +335,7 @@ export default function CheckoutScreen() {
               <View key={item.cart_item_id} style={styles.summaryItem}>
                 <Text style={styles.summaryItemName}>{item.variety_name}</Text>
                 <Text style={styles.summaryItemDetails}>
-                  {item.quantity} {item.sack_size_kg ? `× ${item.sack_size_kg}kg sacks` : "kg"} @ ₱{item.unit_price}
+                  {item.quantity} kg @ ₱{item.unit_price}
                 </Text>
                 <Text style={styles.summaryItemTotal}>₱{parseFloat(item.item_total || 0).toFixed(2)}</Text>
               </View>

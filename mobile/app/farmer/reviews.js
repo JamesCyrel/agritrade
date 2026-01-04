@@ -9,6 +9,20 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerReviewAPI } from "../../services/api";
+import { Star } from "lucide-react-native";
+
+const StarRating = ({ rating, size = 14 }) => (
+  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+    {Array.from({ length: 5 }, (_, i) => (
+      <Star
+        key={i}
+        size={size}
+        color="#f1c40f"
+        fill={i < rating ? "#f1c40f" : "transparent"}
+      />
+    ))}
+  </View>
+);
 
 export default function ReviewsScreen() {
   const [loading, setLoading] = useState(true);
@@ -76,11 +90,7 @@ export default function ReviewsScreen() {
               <Text style={styles.overallRatingValue}>
                 {parseFloat(stats.average_rating || 0).toFixed(1)}
               </Text>
-              <Text style={styles.overallRatingStars}>
-                {Array.from({ length: 5 }, (_, i) => 
-                  i < Math.round(stats.average_rating || 0) ? "⭐" : "☆"
-                ).join("")}
-              </Text>
+              <StarRating rating={Math.round(stats.average_rating || 0)} size={18} />
             </View>
             <Text style={styles.totalReviews}>
               {stats.total_reviews || 0} Total Reviews
@@ -90,7 +100,10 @@ export default function ReviewsScreen() {
           {/* Rating Breakdown */}
           <View style={styles.ratingBreakdown}>
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>5 ⭐</Text>
+              <View style={styles.ratingLabelContainer}>
+                <Text style={styles.ratingLabelNum}>5</Text>
+                <Star size={12} color="#f1c40f" fill="#f1c40f" />
+              </View>
               <View style={styles.ratingBar}>
                 <View
                   style={[
@@ -104,7 +117,10 @@ export default function ReviewsScreen() {
               <Text style={styles.ratingCount}>{stats.five_star || 0}</Text>
             </View>
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>4 ⭐</Text>
+              <View style={styles.ratingLabelContainer}>
+                <Text style={styles.ratingLabelNum}>4</Text>
+                <Star size={12} color="#f1c40f" fill="#f1c40f" />
+              </View>
               <View style={styles.ratingBar}>
                 <View
                   style={[
@@ -118,7 +134,10 @@ export default function ReviewsScreen() {
               <Text style={styles.ratingCount}>{stats.four_star || 0}</Text>
             </View>
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>3 ⭐</Text>
+              <View style={styles.ratingLabelContainer}>
+                <Text style={styles.ratingLabelNum}>3</Text>
+                <Star size={12} color="#f1c40f" fill="#f1c40f" />
+              </View>
               <View style={styles.ratingBar}>
                 <View
                   style={[
@@ -132,7 +151,10 @@ export default function ReviewsScreen() {
               <Text style={styles.ratingCount}>{stats.three_star || 0}</Text>
             </View>
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>2 ⭐</Text>
+              <View style={styles.ratingLabelContainer}>
+                <Text style={styles.ratingLabelNum}>2</Text>
+                <Star size={12} color="#f1c40f" fill="#f1c40f" />
+              </View>
               <View style={styles.ratingBar}>
                 <View
                   style={[
@@ -146,7 +168,10 @@ export default function ReviewsScreen() {
               <Text style={styles.ratingCount}>{stats.two_star || 0}</Text>
             </View>
             <View style={styles.ratingRow}>
-              <Text style={styles.ratingLabel}>1 ⭐</Text>
+              <View style={styles.ratingLabelContainer}>
+                <Text style={styles.ratingLabelNum}>1</Text>
+                <Star size={12} color="#f1c40f" fill="#f1c40f" />
+              </View>
               <View style={styles.ratingBar}>
                 <View
                   style={[
@@ -168,7 +193,7 @@ export default function ReviewsScreen() {
         <Text style={styles.reviewsSectionTitle}>All Reviews</Text>
         {reviews.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateIcon}>⭐</Text>
+            <Star size={48} color="#f1c40f" fill="#f1c40f" />
             <Text style={styles.emptyStateText}>No reviews yet</Text>
             <Text style={styles.emptyStateSubtext}>
               Reviews from customers will appear here
@@ -194,11 +219,7 @@ export default function ReviewsScreen() {
                   )}
                 </View>
                 <View style={styles.reviewRating}>
-                  <Text style={styles.reviewRatingStars}>
-                    {Array.from({ length: 5 }, (_, i) => 
-                      i < review.rating ? "⭐" : "☆"
-                    ).join("")}
-                  </Text>
+                  <StarRating rating={review.rating} size={14} />
                 </View>
               </View>
               
@@ -277,6 +298,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     width: 40,
+  },
+  ratingLabelContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: 40,
+  },
+  ratingLabelNum: {
+    fontSize: 14,
+    color: "#666",
+    marginRight: 2,
   },
   ratingBar: {
     flex: 1,

@@ -308,6 +308,9 @@ export const consumerAPI = {
   cancelOrder: async (token, orderId) => {
     return await apiCall(`/consumer/orders/${orderId}/cancel`, 'POST', null, token);
   },
+  markOrderDelivered: async (token, orderId) => {
+    return await apiCall(`/consumer/orders/${orderId}/delivered`, 'POST', null, token);
+  },
   validatePromoCode: async (token, code, orderAmount) => {
     return await apiCall('/consumer/promo-codes/validate', 'POST', { code, orderAmount }, token);
   },

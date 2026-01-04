@@ -320,7 +320,7 @@ export default function OrderDetailScreen() {
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.product_name}</Text>
                 <Text style={styles.itemDetails}>
-                  {item.quantity} {item.sack_size_kg ? `sacks (${item.sack_size_kg}kg each)` : "kg"} × ₱{parseFloat(item.unit_price).toFixed(2)}
+                  {item.quantity} kg × ₱{parseFloat(item.unit_price).toFixed(2)}
                 </Text>
               </View>
               <Text style={styles.itemSubtotal}>

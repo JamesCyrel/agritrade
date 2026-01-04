@@ -36,7 +36,7 @@ const getStatusColor = (status) => {
     case ORDER_STATUSES.PENDING:
       return "#ff9800";
     case ORDER_STATUSES.CONFIRMED:
-      return "#2196f3";
+      return "#00bcd4"; // Use Out for Delivery color for Confirmed
     case ORDER_STATUSES.PREPARING:
       return "#9c27b0";
     case ORDER_STATUSES.OUT_FOR_DELIVERY:
@@ -55,7 +55,7 @@ const getStatusLabel = (status) => {
     case ORDER_STATUSES.PENDING:
       return "PENDING";
     case ORDER_STATUSES.CONFIRMED:
-      return "CONFIRMED";
+      return "OUT FOR DELIVERY"; // Show "Out for Delivery" instead of "Confirmed"
     case ORDER_STATUSES.PREPARING:
       return "PREPARING";
     case ORDER_STATUSES.OUT_FOR_DELIVERY:

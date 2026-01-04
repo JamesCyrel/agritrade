@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI } from "../../../services/api";
+import { XCircle, Star } from "lucide-react-native";
 
 export default function OrderDetailScreen() {
   const router = useRouter();
@@ -22,10 +23,28 @@ export default function OrderDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
   const [reviewData, setReviewData] = useState(null);
+  
+  // Timer state for auto-delivery
+  const [deliveryTimer, setDeliveryTimer] = useState(null);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const timerRef = useRef(null);
 
   useEffect(() => {
     loadOrder();
+    return () => {
+      // Cleanup timer on unmount
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
   }, [orderId]);
+
+  // Start timer when order is CONFIRMED
+  useEffect(() => {
+    if (order && order.status === "CONFIRMED" && !timerRef.current) {
+      startDeliveryTimer();
+    }
+  }, [order]);
 
   useFocusEffect(
     React.useCallback(() => {
@@ -34,6 +53,41 @@ export default function OrderDetailScreen() {
       }
     }, [order])
   );
+
+  const startDeliveryTimer = () => {
+    setTimerSeconds(10);
+    timerRef.current = setInterval(() => {
+      setTimerSeconds(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+          // Auto-update to delivered
+          autoMarkDelivered();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const autoMarkDelivered = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      // Call API to mark as delivered (this will use the existing API)
+      const res = await consumerAPI.markOrderDelivered(token, orderId);
+      if (res.success) {
+        // Reload order to get updated status
+        loadOrder();
+      } else {
+        console.log("Auto-delivery update failed:", res.message);
+        // Still reload to check current status
+        loadOrder();
+      }
+    } catch (error) {
+      console.error("Auto mark delivered error:", error);
+      loadOrder();
+    }
+  };
 
   const loadOrder = async () => {
     try {
@@ -69,7 +123,9 @@ export default function OrderDetailScreen() {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
+    // CONFIRMED shows as "Out for Delivery"
+    const displayStatus = status === "CONFIRMED" ? "OUT_FOR_DELIVERY" : status;
+    switch (displayStatus) {
       case "PENDING":
         return "#ff9800";
       case "CONFIRMED":
@@ -85,6 +141,14 @@ export default function OrderDetailScreen() {
       default:
         return "#666";
     }
+  };
+
+  // Get display status label - CONFIRMED shows as "Out for Delivery"
+  const getDisplayStatus = (status) => {
+    if (status === "CONFIRMED") {
+      return "OUT FOR DELIVERY";
+    }
+    return status.replace(/_/g, " ");
   };
 
   const formatDate = (dateString) => {
@@ -170,9 +234,20 @@ export default function OrderDetailScreen() {
       <View style={styles.header}>
         <Text style={styles.orderNumber}>{order.order_number}</Text>
         <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
-          <Text style={styles.statusText}>{order.status.replace("_", " ")}</Text>
+          <Text style={styles.statusText}>{getDisplayStatus(order.status)}</Text>
         </View>
       </View>
+
+      {/* Delivery Timer - show when order is confirmed/out for delivery */}
+      {order.status === "CONFIRMED" && timerSeconds > 0 && (
+        <View style={styles.timerContainer}>
+          <Text style={styles.timerTitle}>🚚 Your order is on the way!</Text>
+          <Text style={styles.timerText}>Estimated delivery in: {timerSeconds} seconds</Text>
+          <View style={styles.timerProgressBar}>
+            <View style={[styles.timerProgress, { width: `${(timerSeconds / 10) * 100}%` }]} />
+          </View>
+        </View>
+      )}
 
       <View style={styles.content}>
         {/* Order Items */}
@@ -191,7 +266,7 @@ export default function OrderDetailScreen() {
                 <Text style={styles.orderItemName}>{item.variety_name || item.name || 'Rice Product'}</Text>
                 <Text style={styles.orderItemType}>{item.rice_type || ''}</Text>
                 <Text style={styles.orderItemQuantity}>
-                  {item.quantity} {item.sack_size_kg ? `× ${item.sack_size_kg}kg sacks` : "kg"} @ ₱{parseFloat(item.unit_price || 0).toFixed(2)}
+                  {item.quantity} kg @ ₱{parseFloat(item.unit_price || 0).toFixed(2)}
                 </Text>
                 <Text style={styles.orderItemTotal}>₱{parseFloat(item.subtotal || 0).toFixed(2)}</Text>
               </View>
@@ -298,7 +373,7 @@ export default function OrderDetailScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <>
-                  <Text style={styles.cancelButtonIcon}>❌</Text>
+                  <XCircle size={20} color="#fff" style={{ marginRight: 8 }} />
                   <Text style={styles.cancelButtonText}>Cancel Order</Text>
                 </>
               )}
@@ -314,15 +389,18 @@ export default function OrderDetailScreen() {
           <View style={styles.section}>
             {hasReviewed ? (
               <View style={styles.reviewSubmittedCard}>
-                <Text style={styles.reviewSubmittedIcon}>⭐</Text>
+                <Star size={32} color="#f1c40f" fill="#f1c40f" />
                 <Text style={styles.reviewSubmittedText}>Thank you for your review!</Text>
                 {reviewData && (
                   <View style={styles.reviewDisplay}>
                     <View style={styles.reviewStars}>
                       {[1, 2, 3, 4, 5].map((star) => (
-                        <Text key={star} style={styles.reviewStar}>
-                          {star <= reviewData.rating ? "⭐" : "☆"}
-                        </Text>
+                        <Star
+                          key={star}
+                          size={20}
+                          color="#f1c40f"
+                          fill={star <= reviewData.rating ? "#f1c40f" : "transparent"}
+                        />
                       ))}
                     </View>
                     {reviewData.comment && (
@@ -339,7 +417,7 @@ export default function OrderDetailScreen() {
               </View>
             ) : (
               <View style={styles.reviewPromptCard}>
-                <Text style={styles.reviewPromptIcon}>⭐</Text>
+                <Star size={32} color="#f1c40f" fill="#f1c40f" />
                 <Text style={styles.reviewPromptTitle}>Rate Your Experience</Text>
                 <Text style={styles.reviewPromptText}>
                   How was your order? Help other customers by sharing your experience!
@@ -592,5 +670,39 @@ const styles = StyleSheet.create({
     textDecorationLine: "underline",
   },
   emptyStateText: { fontSize: 16, color: "#666" },
+  // Timer styles
+  timerContainer: {
+    backgroundColor: "#e3f2fd",
+    borderRadius: 12,
+    padding: 16,
+    margin: 16,
+    marginBottom: 0,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#2196f3",
+  },
+  timerTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#1976d2",
+    marginBottom: 8,
+  },
+  timerText: {
+    fontSize: 16,
+    color: "#1976d2",
+    marginBottom: 12,
+  },
+  timerProgressBar: {
+    width: "100%",
+    height: 8,
+    backgroundColor: "#bbdefb",
+    borderRadius: 4,
+    overflow: "hidden",
+  },
+  timerProgress: {
+    height: "100%",
+    backgroundColor: "#2196f3",
+    borderRadius: 4,
+  },
 });
 

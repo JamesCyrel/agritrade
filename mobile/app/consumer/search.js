@@ -14,6 +14,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI, getImageUrl } from "../../services/api";
+import { MapPin, Star, Heart } from "lucide-react-native";
 
 export default function SearchScreen() {
   const router = useRouter();
@@ -200,14 +201,20 @@ export default function SearchScreen() {
                     <Text style={styles.productPrice}>₱{product.price_per_kg}/kg</Text>
                     <Text style={styles.productType}>{product.rice_type}</Text>
                     {product.distance_km && (
-                      <Text style={styles.productDistance}>
-                        📍 {product.distance_km.toFixed(1)} km away
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <MapPin size={12} color="#666" />
+                        <Text style={styles.productDistance}>
+                          {product.distance_km.toFixed(1)} km away
+                        </Text>
+                      </View>
                     )}
                     {product.average_rating > 0 && (
-                      <Text style={styles.productRating}>
-                        ⭐ {product.average_rating.toFixed(1)} ({product.total_reviews} reviews)
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Star size={12} color="#f1c40f" fill="#f1c40f" />
+                        <Text style={styles.productRating}>
+                          {product.average_rating.toFixed(1)} ({product.total_reviews} reviews)
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </TouchableOpacity>
@@ -337,14 +344,17 @@ export default function SearchScreen() {
                     ]}
                     onPress={() => setMinRating(minRating === rating ? null : rating)}
                   >
-                    <Text
-                      style={[
-                        styles.filterOptionText,
-                        minRating === rating && styles.filterOptionTextActive,
-                      ]}
-                    >
-                      {rating}+ ⭐
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text
+                        style={[
+                          styles.filterOptionText,
+                          minRating === rating && styles.filterOptionTextActive,
+                        ]}
+                      >
+                        {rating}+
+                      </Text>
+                      <Star size={14} color={minRating === rating ? "#fff" : "#f1c40f"} fill={minRating === rating ? "#fff" : "#f1c40f"} style={{ marginLeft: 4 }} />
+                    </View>
                   </TouchableOpacity>
                 ))}
               </View>

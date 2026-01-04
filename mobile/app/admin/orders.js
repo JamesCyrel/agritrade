@@ -58,6 +58,7 @@ useEffect(() => {
       case "PENDING":
         return "#fff3cd";
       case "CONFIRMED":
+      case "ACCEPTED":
         return "#d4edda";
       case "OUT_FOR_DELIVERY":
         return "#cfe2ff";
@@ -75,6 +76,7 @@ useEffect(() => {
       case "PENDING":
         return "#856404";
       case "CONFIRMED":
+      case "ACCEPTED":
         return "#155724";
       case "OUT_FOR_DELIVERY":
         return "#004085";
@@ -116,6 +118,7 @@ useEffect(() => {
         {[
           { label: "All", value: "ALL" },
           { label: "Pending", value: "PENDING" },
+          { label: "Accepted", value: "ACCEPTED" },
           { label: "Confirmed", value: "CONFIRMED" },
           { label: "Out for Delivery", value: "OUT_FOR_DELIVERY" },
           { label: "Delivered", value: "DELIVERED" },

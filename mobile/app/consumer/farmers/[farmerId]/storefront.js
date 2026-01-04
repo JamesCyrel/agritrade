@@ -12,6 +12,7 @@ import {
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI, getImageUrl } from "../../../../services/api";
+import { Tractor, MapPin, Star, Wheat, Heart } from "lucide-react-native";
 
 export default function FarmerStorefrontScreen() {
   const router = useRouter();
@@ -90,16 +91,22 @@ export default function FarmerStorefrontScreen() {
       {/* Farmer Header */}
       <View style={styles.farmerHeader}>
         <View style={styles.farmerImage}>
-          <Text style={styles.farmerImagePlaceholder}>🚜</Text>
+          <Tractor size={50} color="#2d5016" />
         </View>
         <Text style={styles.farmerName}>{farmerName}</Text>
         {farmer.address && String(farmer.address).trim() && (
-          <Text style={styles.farmerAddress}>📍 {String(farmer.address)}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <MapPin size={14} color="#666" />
+            <Text style={styles.farmerAddress}>{String(farmer.address)}</Text>
+          </View>
         )}
         {farmer.average_rating != null && !isNaN(parseFloat(farmer.average_rating)) && parseFloat(farmer.average_rating) > 0 && (
-          <Text style={styles.farmerRating}>
-            ⭐ {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Star size={14} color="#f1c40f" fill="#f1c40f" />
+            <Text style={styles.farmerRating}>
+              {parseFloat(farmer.average_rating).toFixed(1)} ({String(farmer.total_reviews || 0)} reviews)
+            </Text>
+          </View>
         )}
       </View>
 
@@ -138,16 +145,18 @@ export default function FarmerStorefrontScreen() {
                       <Image source={{ uri: getImageUrl(product.images[0]) }} style={styles.productImage} />
                     ) : (
                       <View style={styles.productImage}>
-                        <Text style={styles.productImagePlaceholder}>🌾</Text>
+                        <Wheat size={40} color="#2d5016" />
                       </View>
                     )}
                     <TouchableOpacity
                       style={styles.favoriteButton}
                       onPress={(e) => handleToggleFavorite(product.product_id, e)}
                     >
-                      <Text style={styles.favoriteIcon}>
-                        {favoriteStatus[product.product_id] ? "❤️" : "🤍"}
-                      </Text>
+                      <Heart
+                        size={20}
+                        color={favoriteStatus[product.product_id] ? "#e74c3c" : "#666"}
+                        fill={favoriteStatus[product.product_id] ? "#e74c3c" : "transparent"}
+                      />
                     </TouchableOpacity>
                   </View>
                   <View style={styles.productDetails}>
@@ -158,9 +167,12 @@ export default function FarmerStorefrontScreen() {
                       {quantity} {unit} available
                     </Text>
                     {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (
-                      <Text style={styles.productRating}>
-                        ⭐ {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Star size={12} color="#f1c40f" fill="#f1c40f" />
+                        <Text style={styles.productRating}>
+                          {parseFloat(product.average_rating).toFixed(1)} ({String(product.total_reviews || 0)})
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </TouchableOpacity>
