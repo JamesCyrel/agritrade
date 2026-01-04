@@ -97,12 +97,12 @@ async function seed() {
         // Seed Products
         console.log('🌾 Creating sample products...');
         const products = [
-            { farmerId: farmerIds[0], riceType: 'MILLED', variety: 'Sinandomeng', description: 'Premium quality Sinandomeng rice, locally grown and freshly milled.', price: 55.00, quantity: 500 },
-            { farmerId: farmerIds[0], riceType: 'MILLED', variety: 'Jasmine Rice', description: 'Fragrant jasmine rice perfect for everyday meals.', price: 65.00, quantity: 300 },
-            { farmerId: farmerIds[1], riceType: 'MILLED', variety: 'Dinorado', description: 'High-quality Dinorado rice with excellent aroma and taste.', price: 75.00, quantity: 400 },
-            { farmerId: farmerIds[1], riceType: 'UNMILLED_PADDY', variety: 'Fresh Palay', description: 'Unmilled paddy rice, ideal for bulk buyers and millers.', price: 28.00, quantity: 1000 },
-            { farmerId: farmerIds[2], riceType: 'MILLED', variety: 'Organic Brown Rice', description: 'Certified organic brown rice, healthy and nutritious.', price: 85.00, quantity: 200 },
-            { farmerId: farmerIds[2], riceType: 'MILLED', variety: 'Red Rice', description: 'Nutritious red rice variety with natural antioxidants.', price: 90.00, quantity: 150 },
+            { farmerId: farmerIds[0], riceType: 'MILLED', variety: 'Sinandomeng', description: 'Premium quality Sinandomeng rice, locally grown and freshly milled.', price: 55.00, quantity: 500, images: ['/assets/rice/rice1.jpg', '/assets/rice/rice2.jpg'] },
+            { farmerId: farmerIds[0], riceType: 'MILLED', variety: 'Jasmine Rice', description: 'Fragrant jasmine rice perfect for everyday meals.', price: 65.00, quantity: 300, images: ['/assets/rice/rice3.jpg', '/assets/rice/rice4.jpg'] },
+            { farmerId: farmerIds[1], riceType: 'MILLED', variety: 'Dinorado', description: 'High-quality Dinorado rice with excellent aroma and taste.', price: 75.00, quantity: 400, images: ['/assets/rice/rice5.webp', '/assets/rice/unmilledrice1.avif'] },
+            { farmerId: farmerIds[1], riceType: 'UNMILLED_PADDY', variety: 'Fresh Palay', description: 'Unmilled paddy rice, ideal for bulk buyers and millers.', price: 28.00, quantity: 1000, images: ['/assets/rice/unmilledrice2.jpg', '/assets/rice/unmilledrice3.webp'] },
+            { farmerId: farmerIds[2], riceType: 'MILLED', variety: 'Organic Brown Rice', description: 'Certified organic brown rice, healthy and nutritious.', price: 85.00, quantity: 200, images: ['/assets/rice/unmilledrice4.webp', '/assets/rice/rice1.jpg'] },
+            { farmerId: farmerIds[2], riceType: 'MILLED', variety: 'Red Rice', description: 'Nutritious red rice variety with natural antioxidants.', price: 90.00, quantity: 150, images: ['/assets/rice/rice2.jpg', '/assets/rice/rice3.jpg'] },
         ];
 
         for (const product of products) {
@@ -113,6 +113,15 @@ async function seed() {
                 [product.farmerId, product.riceType, product.variety, product.description, product.price, product.quantity]
             );
             const productId = result.rows[0].product_id;
+
+            // Add product images
+            for (let i = 0; i < product.images.length; i++) {
+                await pool.query(
+                    `INSERT INTO product_images (product_id, image_url, image_order) 
+             VALUES ($1, $2, $3)`,
+                    [productId, product.images[i], i]
+                );
+            }
 
             // Add sack sizes for each product
             await pool.query(
@@ -130,7 +139,7 @@ async function seed() {
         console.log('   - 1 Admin user');
         console.log('   - 3 Farmer users (with profiles)');
         console.log('   - 2 Consumer users (with addresses)');
-        console.log('   - 6 Products (with sack sizes)');
+        console.log('   - 6 Products (with images and sack sizes)');
         console.log('\n🔑 All test users have password: password123');
         console.log('\n📧 Test accounts:');
         console.log('   Admin:    admin@agritrade.com');
