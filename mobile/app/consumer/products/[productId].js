@@ -26,15 +26,30 @@ export default function ProductDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [product, setProduct] = useState(null);
   const [showAddToCart, setShowAddToCart] = useState(false);
-  const [selectedSackSize, setSelectedSackSize] = useState(null); // null = buy by kg
   const [quantity, setQuantity] = useState("1");
   const [addingToCart, setAddingToCart] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
+  const [cartQuantity, setCartQuantity] = useState(0); // Track quantity already in cart
 
   useEffect(() => {
     loadProduct();
+    loadCartQuantity();
   }, [productId]);
+
+  // Load current cart quantity for this product
+  const loadCartQuantity = async () => {
+    try {
+      const token = await AsyncStorage.getItem("authToken");
+      const res = await consumerAPI.getCart(token);
+      if (res.success && res.data && res.data.items) {
+        const cartItem = res.data.items.find(item => item.product_id == productId);
+        setCartQuantity(cartItem ? parseFloat(cartItem.quantity) : 0);
+      }
+    } catch (error) {
+      console.error("Load cart quantity error:", error);
+    }
+  };
 
   useEffect(() => {
     if (productId) {
@@ -42,11 +57,12 @@ export default function ProductDetailScreen() {
     }
   }, [productId]);
 
-  // Refresh favorite status when screen comes into focus
+  // Refresh favorite status and cart quantity when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (productId) {
         checkFavoriteStatus();
+        loadCartQuantity();
       }
     }, [productId])
   );
@@ -115,16 +131,34 @@ export default function ProductDetailScreen() {
 
   const handleAddToCart = async () => {
     if (!quantity || parseFloat(quantity) <= 0) {
-      Alert.alert("Error", "Please enter a valid quantity");
+      Alert.alert(
+        "Invalid Quantity",
+        "Please enter a valid quantity greater than 0.",
+        [{ text: "OK", style: "default" }]
+      );
       return;
     }
 
-    const maxQuantity = selectedSackSize === null
-      ? parseFloat(product.available_quantity)
-      : Math.floor(parseFloat(product.available_quantity) / parseFloat(selectedSackSize));
+    const availableQty = parseFloat(product.available_quantity) || 0;
+    const requestedQty = parseFloat(quantity);
+    const totalQtyAfterAdd = cartQuantity + requestedQty;
+    const remainingAvailable = availableQty - cartQuantity;
 
-    if (parseFloat(quantity) > maxQuantity) {
-      Alert.alert("Error", `Maximum available: ${maxQuantity} ${selectedSackSize === null ? 'kg' : 'sacks'}`);
+    // Check if total quantity (cart + new) exceeds available stock
+    if (totalQtyAfterAdd > availableQty) {
+      if (remainingAvailable <= 0) {
+        Alert.alert(
+          "Maximum Quantity Reached",
+          `You already have ${cartQuantity} kg of ${product.variety_name || 'this product'} in your cart, which is the maximum available.`,
+          [{ text: "OK", style: "default" }]
+        );
+      } else {
+        Alert.alert(
+          "Quantity Limit Exceeded",
+          `Sorry, only ${availableQty} kg of ${product.variety_name || 'this product'} is available.\n\nYou already have ${cartQuantity} kg in your cart. You can only add ${remainingAvailable} kg more.`,
+          [{ text: "OK", style: "default" }]
+        );
+      }
       return;
     }
 
@@ -133,26 +167,53 @@ export default function ProductDetailScreen() {
       const token = await AsyncStorage.getItem("authToken");
       const res = await consumerAPI.addToCart(token, {
         product_id: product.product_id,
-        quantity: parseFloat(quantity),
-        sack_size_kg: selectedSackSize, // null for kg purchase, or 10/25/50 for sack purchase
+        quantity: requestedQty,
       });
 
       if (res.success) {
-        Alert.alert("Success", "Item added to cart", [
+        // Update local cart quantity
+        setCartQuantity(prev => prev + requestedQty);
+        Alert.alert("Success", `Added ${requestedQty} kg to cart. Total in cart: ${totalQtyAfterAdd} kg`, [
           {
             text: "OK", onPress: () => {
               setShowAddToCart(false);
               setQuantity("1");
-              setSelectedSackSize(null);
             }
           },
         ]);
       } else {
-        Alert.alert("Error", res.message || "Failed to add item to cart");
+        // Handle backend error (e.g., stock changed since page load)
+        if (res.message && (res.message.toLowerCase().includes('available') || res.message.toLowerCase().includes('stock'))) {
+          Alert.alert(
+            "Quantity Limit Exceeded",
+            res.message,
+            [{ text: "OK", style: "default" }]
+          );
+          // Refresh product and cart data
+          loadProduct();
+          loadCartQuantity();
+        } else {
+          Alert.alert("Error", res.message || "Failed to add item to cart");
+        }
       }
     } catch (error) {
       console.error("Add to cart error:", error);
-      Alert.alert("Error", "Failed to add item to cart");
+      // Extract error message from various possible formats
+      const errorMsg = error?.body?.message || error?.message || "Failed to add item to cart";
+      
+      // Check if it's a stock-related error
+      if (errorMsg.toLowerCase().includes('available') || errorMsg.toLowerCase().includes('stock') || errorMsg.toLowerCase().includes('maximum')) {
+        Alert.alert(
+          "Quantity Limit Exceeded",
+          errorMsg,
+          [{ text: "OK", style: "default" }]
+        );
+        // Refresh product and cart data since stock may have changed
+        loadProduct();
+        loadCartQuantity();
+      } else {
+        Alert.alert("Error", errorMsg);
+      }
     } finally {
       setAddingToCart(false);
     }
@@ -210,6 +271,12 @@ export default function ProductDetailScreen() {
             <Text style={styles.productName}>{product.variety_name}</Text>
             <Text style={styles.productType}>{product.rice_type}</Text>
             <Text style={styles.productPrice}>₱{product.price_per_kg} per kg</Text>
+            {/* Out of Stock Badge */}
+            {product.is_out_of_stock && (
+              <View style={styles.outOfStockBadge}>
+                <Text style={styles.outOfStockText}>Out of Stock</Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -223,24 +290,10 @@ export default function ProductDetailScreen() {
         {/* Availability */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Availability</Text>
-          <Text style={styles.sectionContent}>
-            {product.available_quantity} {product.quantity_unit} available
+          <Text style={[styles.sectionContent, product.is_out_of_stock && { color: '#f44336' }]}>
+            {product.is_out_of_stock ? 'Out of Stock' : `${product.available_quantity} kg available`}
           </Text>
         </View>
-
-        {/* Sack Sizes */}
-        {product.sack_sizes && product.sack_sizes.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Available Sack Sizes</Text>
-            {product.sack_sizes.map((sack, index) => (
-              <View key={index} style={styles.sackSizeItem}>
-                <Text style={styles.sackSizeText}>
-                  {sack.size_kg} kg - ₱{sack.price}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
 
         {/* Farmer Info */}
         <View style={styles.section}>
@@ -291,13 +344,39 @@ export default function ProductDetailScreen() {
           </Text>
         </View>
 
-        {/* Add to Cart Button */}
-        <TouchableOpacity
-          style={styles.addToCartButton}
-          onPress={() => setShowAddToCart(true)}
-        >
-          <Text style={styles.addToCartText}>Add to Cart</Text>
-        </TouchableOpacity>
+        {/* Add to Cart Button - Disabled if out of stock or max quantity reached */}
+        {(() => {
+          const availableQty = parseFloat(product.available_quantity) || 0;
+          const isOutOfStock = product.is_out_of_stock || availableQty <= 0;
+          const isMaxInCart = cartQuantity >= availableQty && availableQty > 0;
+          const isDisabled = isOutOfStock || isMaxInCart;
+          
+          let buttonText = 'Add to Cart';
+          if (isOutOfStock) {
+            buttonText = 'Out of Stock';
+          } else if (isMaxInCart) {
+            buttonText = 'Maximum in Cart';
+          }
+          
+          return (
+            <TouchableOpacity
+              style={[styles.addToCartButton, isDisabled && styles.addToCartButtonDisabled]}
+              onPress={() => {
+                if (isMaxInCart) {
+                  Alert.alert(
+                    "Maximum Quantity Reached",
+                    `You already have ${cartQuantity} kg of ${product.variety_name || 'this product'} in your cart, which is the maximum available.`,
+                    [{ text: "OK", style: "default" }]
+                  );
+                } else if (!isDisabled) {
+                  setShowAddToCart(true);
+                }
+              }}
+            >
+              <Text style={styles.addToCartText}>{buttonText}</Text>
+            </TouchableOpacity>
+          );
+        })()}
       </View>
 
       {/* Add to Cart Modal */}
@@ -312,78 +391,51 @@ export default function ProductDetailScreen() {
             </View>
 
             <ScrollView style={styles.modalBody}>
-              {/* Purchase Option */}
-              <Text style={styles.modalLabel}>Purchase Option</Text>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  selectedSackSize === null && styles.optionButtonActive,
-                ]}
-                onPress={() => setSelectedSackSize(null)}
-              >
-                <Text
-                  style={[
-                    styles.optionButtonText,
-                    selectedSackSize === null && styles.optionButtonTextActive,
-                  ]}
-                >
-                  By Kilogram - ₱{product.price_per_kg}/kg
+              {/* Product Info */}
+              <View style={styles.optionButton}>
+                <Text style={styles.optionButtonTextActive}>
+                  {product.variety_name} - ₱{product.price_per_kg}/kg
                 </Text>
-              </TouchableOpacity>
-
-              {/* Sack Size Options */}
-              {product.sack_sizes && product.sack_sizes.length > 0 && (
-                <>
-                  {product.sack_sizes.map((sack, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={[
-                        styles.optionButton,
-                        selectedSackSize === sack.size_kg && styles.optionButtonActive,
-                      ]}
-                      onPress={() => setSelectedSackSize(sack.size_kg)}
-                    >
-                      <Text
-                        style={[
-                          styles.optionButtonText,
-                          selectedSackSize === sack.size_kg && styles.optionButtonTextActive,
-                        ]}
-                      >
-                        {sack.size_kg} kg Sack - ₱{sack.price} per sack
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
+                <Text style={styles.quantityHint}>
+                  Total Available: {product.available_quantity} kg
+                </Text>
+                {cartQuantity > 0 && (
+                  <Text style={[styles.quantityHint, { color: '#2d5016', fontWeight: '600' }]}>
+                    Already in Cart: {cartQuantity} kg
+                  </Text>
+                )}
+              </View>
 
               {/* Quantity Input */}
-              <Text style={styles.modalLabel}>Quantity</Text>
+              <Text style={styles.modalLabel}>Quantity (kg)</Text>
               <TextInput
                 style={styles.quantityInput}
                 value={quantity}
-                onChangeText={setQuantity}
-                placeholder="Enter quantity"
+                onChangeText={(text) => {
+                  // Only allow numbers and one decimal point, no negative values
+                  const sanitized = text.replace(/[^0-9.]/g, '');
+                  // Ensure only one decimal point
+                  const parts = sanitized.split('.');
+                  const cleaned = parts.length > 2 
+                    ? parts[0] + '.' + parts.slice(1).join('')
+                    : sanitized;
+                  setQuantity(cleaned);
+                }}
+                placeholder="Enter quantity in kg"
                 keyboardType="decimal-pad"
               />
-              {selectedSackSize === null ? (
-                <Text style={styles.quantityHint}>Enter quantity in kilograms</Text>
-              ) : (
-                <Text style={styles.quantityHint}>Enter number of sacks</Text>
-              )}
+              <Text style={styles.quantityHint}>
+                {cartQuantity > 0 
+                  ? `You can add up to ${Math.max(0, parseFloat(product.available_quantity) - cartQuantity)} kg more`
+                  : `Maximum: ${product.available_quantity} kg`
+                }
+              </Text>
 
               {/* Price Calculation */}
               <View style={styles.priceCalculation}>
                 <Text style={styles.priceCalculationLabel}>Estimated Total:</Text>
                 <Text style={styles.priceCalculationValue}>
-                  ₱
-                  {selectedSackSize === null
-                    ? (parseFloat(quantity) || 0) * parseFloat(product.price_per_kg)
-                    : product.sack_sizes?.find((s) => s.size_kg === selectedSackSize)?.price
-                      ? (parseFloat(quantity) || 0) *
-                      parseFloat(
-                        product.sack_sizes.find((s) => s.size_kg === selectedSackSize).price
-                      )
-                      : 0}
+                  ₱{((parseFloat(quantity) || 0) * parseFloat(product.price_per_kg)).toFixed(2)}
                 </Text>
               </View>
             </ScrollView>
@@ -396,9 +448,12 @@ export default function ProductDetailScreen() {
                 <Text style={styles.modalCancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalAddButton, addingToCart && styles.modalAddButtonDisabled]}
+                style={[
+                  styles.modalAddButton, 
+                  (addingToCart || (cartQuantity + parseFloat(quantity || 0)) > parseFloat(product.available_quantity)) && styles.modalAddButtonDisabled
+                ]}
                 onPress={handleAddToCart}
-                disabled={addingToCart || !quantity || parseFloat(quantity) <= 0}
+                disabled={addingToCart || !quantity || parseFloat(quantity) <= 0 || (cartQuantity + parseFloat(quantity)) > parseFloat(product.available_quantity)}
               >
                 {addingToCart ? (
                   <ActivityIndicator color="#fff" />
@@ -477,7 +532,23 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 40,
   },
+  addToCartButtonDisabled: {
+    backgroundColor: "#ccc",
+  },
   addToCartText: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  outOfStockBadge: {
+    backgroundColor: "#f44336",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+  outOfStockText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 12,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",

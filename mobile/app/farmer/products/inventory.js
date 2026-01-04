@@ -102,7 +102,15 @@ export default function InventoryUpdateScreen() {
           <TextInput
             style={[styles.input, styles.quantityInput]}
             value={quantity}
-            onChangeText={setQuantity}
+            onChangeText={(text) => {
+              // Only allow numbers and one decimal point, no negative values
+              const sanitized = text.replace(/[^0-9.]/g, '');
+              const parts = sanitized.split('.');
+              const cleaned = parts.length > 2 
+                ? parts[0] + '.' + parts.slice(1).join('')
+                : sanitized;
+              setQuantity(cleaned);
+            }}
             placeholder="0"
             keyboardType="decimal-pad"
           />

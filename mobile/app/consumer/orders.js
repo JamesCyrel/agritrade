@@ -258,11 +258,23 @@ function OrderCard({ order, onPress }) {
     return orderNumber;
   };
 
+  // Get product names from order items
+  const getProductNames = () => {
+    if (!order.items || order.items.length === 0) return "Rice Order";
+    const names = order.items
+      .filter(item => item && item.name)
+      .map(item => item.name);
+    if (names.length === 0) return "Rice Order";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return names.join(" & ");
+    return `${names[0]} & ${names.length - 1} more`;
+  };
+
   return (
     <TouchableOpacity style={styles.orderCard} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.orderCardHeader}>
         <View style={styles.orderCardLeft}>
-          <Text style={styles.orderNumber}>{shortenOrderNumber(order.order_number)}</Text>
+          <Text style={styles.orderNumber}>{getProductNames()}</Text>
           <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>

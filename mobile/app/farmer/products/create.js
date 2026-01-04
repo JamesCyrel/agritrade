@@ -328,7 +328,15 @@ export default function CreateProductScreen() {
       <TextInput
         style={styles.input}
         value={pricePerKg}
-        onChangeText={setPricePerKg}
+        onChangeText={(text) => {
+          // Only allow numbers and one decimal point, no negative values
+          const sanitized = text.replace(/[^0-9.]/g, '');
+          const parts = sanitized.split('.');
+          const cleaned = parts.length > 2 
+            ? parts[0] + '.' + parts.slice(1).join('')
+            : sanitized;
+          setPricePerKg(cleaned);
+        }}
         placeholder="0.00"
         keyboardType="decimal-pad"
       />
@@ -339,7 +347,15 @@ export default function CreateProductScreen() {
         <TextInput
           style={[styles.input, styles.quantityInput]}
           value={availableQuantity}
-          onChangeText={setAvailableQuantity}
+          onChangeText={(text) => {
+            // Only allow numbers and one decimal point, no negative values
+            const sanitized = text.replace(/[^0-9.]/g, '');
+            const parts = sanitized.split('.');
+            const cleaned = parts.length > 2 
+              ? parts[0] + '.' + parts.slice(1).join('')
+              : sanitized;
+            setAvailableQuantity(cleaned);
+          }}
           placeholder="0"
           keyboardType="decimal-pad"
         />

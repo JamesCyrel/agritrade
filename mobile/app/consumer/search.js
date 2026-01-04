@@ -272,7 +272,15 @@ export default function SearchScreen() {
                   style={styles.priceInput}
                   placeholder="Min"
                   value={minPrice}
-                  onChangeText={setMinPrice}
+                  onChangeText={(text) => {
+                    // Only allow numbers and one decimal point, no negative values
+                    const sanitized = text.replace(/[^0-9.]/g, '');
+                    const parts = sanitized.split('.');
+                    const cleaned = parts.length > 2 
+                      ? parts[0] + '.' + parts.slice(1).join('')
+                      : sanitized;
+                    setMinPrice(cleaned);
+                  }}
                   keyboardType="decimal-pad"
                 />
                 <Text style={styles.priceSeparator}>-</Text>
@@ -280,7 +288,15 @@ export default function SearchScreen() {
                   style={styles.priceInput}
                   placeholder="Max"
                   value={maxPrice}
-                  onChangeText={setMaxPrice}
+                  onChangeText={(text) => {
+                    // Only allow numbers and one decimal point, no negative values
+                    const sanitized = text.replace(/[^0-9.]/g, '');
+                    const parts = sanitized.split('.');
+                    const cleaned = parts.length > 2 
+                      ? parts[0] + '.' + parts.slice(1).join('')
+                      : sanitized;
+                    setMaxPrice(cleaned);
+                  }}
                   keyboardType="decimal-pad"
                 />
               </View>

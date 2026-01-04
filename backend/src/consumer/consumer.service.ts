@@ -1,5 +1,5 @@
 
-import { Inject, Injectable, OnModuleInit, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
@@ -208,7 +208,8 @@ export class ConsumerService implements OnModuleInit {
     // Cart
     async getCart(userId: number) {
         const res = await this.pool.query(
-            `SELECT ci.*, ci.sack_size_kg, p.variety_name, p.rice_type, p.price_per_kg, p.quantity_unit as unit, 
+            `SELECT ci.*, ci.sack_size_kg, p.variety_name, p.rice_type, p.price_per_kg, p.quantity_unit as unit,
+             p.available_quantity, p.status as product_status,
              pr.farm_name, pr.full_name as farmer_name, u.email as farmer_email,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
              COALESCE((SELECT ps.price FROM product_sack_sizes ps WHERE ps.product_id = p.product_id AND ps.size_kg = ci.sack_size_kg), p.price_per_kg) as unit_price
@@ -219,60 +220,103 @@ export class ConsumerService implements OnModuleInit {
              WHERE ci.user_id = $1 ORDER BY ci.created_at DESC`,
             [userId]
         );
-        // Calculate item_total for each item
+        // Calculate item_total for each item (all quantities are in kg)
         return res.rows.map(row => ({
             ...row,
-            item_total: row.sack_size_kg 
-                ? parseFloat(row.unit_price) * row.quantity  // sack purchase: price per sack × quantity
-                : parseFloat(row.price_per_kg) * row.quantity // kg purchase: price per kg × quantity
+            available_quantity: parseFloat(row.available_quantity) || 0,
+            item_total: parseFloat(row.price_per_kg) * row.quantity // kg purchase: price per kg × quantity
         }));
     }
 
     async addToCart(userId: number, data: any) {
-        const { product_id, quantity, sack_size_kg } = data;
+        const { product_id, quantity } = data;
         
-        // Validate sack_size_kg if provided (must be null, 10, 25, or 50)
-        const validSackSizes = [10, 25, 50];
-        if (sack_size_kg !== null && sack_size_kg !== undefined && !validSackSizes.includes(sack_size_kg)) {
-            throw new NotFoundException(`Invalid sack size. Valid options are: ${validSackSizes.join(', ')} kg`);
+        // Get product to check available quantity
+        const productRes = await this.pool.query(
+            `SELECT available_quantity, status FROM products WHERE product_id = $1`,
+            [product_id]
+        );
+        
+        if (productRes.rows.length === 0) {
+            throw new NotFoundException('Product not found');
         }
         
-        // Use upsert logic manually since we have a unique index with COALESCE
-        const sackValue = sack_size_kg || null;
+        const product = productRes.rows[0];
+        const availableQty = parseFloat(product.available_quantity) || 0;
         
-        // Check if item already exists
+        // Check if product is out of stock
+        if (availableQty <= 0 || product.status === 'OUT_OF_STOCK') {
+            throw new BadRequestException('This product is out of stock');
+        }
+        
+        // Check if item already exists in cart
         const existing = await this.pool.query(
             `SELECT cart_item_id, quantity FROM cart_items 
-             WHERE user_id = $1 AND product_id = $2 AND COALESCE(sack_size_kg, 0) = COALESCE($3, 0)`,
-            [userId, product_id, sackValue]
+             WHERE user_id = $1 AND product_id = $2`,
+            [userId, product_id]
         );
+        
+        const requestedQty = parseFloat(quantity) || 1;
+        let totalQtyInCart = requestedQty;
+        
+        if (existing.rows.length > 0) {
+            totalQtyInCart = existing.rows[0].quantity + requestedQty;
+        }
+        
+        // Validate that total quantity doesn't exceed available stock
+        if (totalQtyInCart > availableQty) {
+            const availableToAdd = availableQty - (existing.rows.length > 0 ? existing.rows[0].quantity : 0);
+            if (availableToAdd <= 0) {
+                throw new BadRequestException(`Maximum available quantity already in cart. Available: ${availableQty} kg`);
+            }
+            throw new BadRequestException(`Cannot add ${requestedQty} kg. Only ${availableToAdd} kg more available. Total available: ${availableQty} kg`);
+        }
         
         if (existing.rows.length > 0) {
             // Update existing item
-            const newQuantity = existing.rows[0].quantity + (quantity || 1);
             const res = await this.pool.query(
                 `UPDATE cart_items SET quantity = $1, updated_at = NOW() 
                  WHERE cart_item_id = $2 RETURNING *`,
-                [newQuantity, existing.rows[0].cart_item_id]
+                [totalQtyInCart, existing.rows[0].cart_item_id]
             );
             return res.rows[0];
         } else {
             // Insert new item
             const res = await this.pool.query(
-                `INSERT INTO cart_items (user_id, product_id, quantity, sack_size_kg) 
-                 VALUES ($1, $2, $3, $4) RETURNING *`,
-                [userId, product_id, quantity || 1, sackValue]
+                `INSERT INTO cart_items (user_id, product_id, quantity) 
+                 VALUES ($1, $2, $3) RETURNING *`,
+                [userId, product_id, requestedQty]
             );
             return res.rows[0];
         }
     }
 
     async updateCartItem(userId: number, cartItemId: number, quantity: number) {
+        // Get cart item with product info to check available quantity
+        const cartItemRes = await this.pool.query(
+            `SELECT ci.*, p.available_quantity, p.status as product_status 
+             FROM cart_items ci 
+             JOIN products p ON ci.product_id = p.product_id 
+             WHERE ci.cart_item_id = $1 AND ci.user_id = $2`,
+            [cartItemId, userId]
+        );
+        
+        if (cartItemRes.rows.length === 0) {
+            throw new NotFoundException('Cart item not found');
+        }
+        
+        const cartItem = cartItemRes.rows[0];
+        const availableQty = parseFloat(cartItem.available_quantity) || 0;
+        
+        // Validate quantity doesn't exceed available stock
+        if (quantity > availableQty) {
+            throw new BadRequestException(`Cannot set quantity to ${quantity} kg. Only ${availableQty} kg available.`);
+        }
+        
         const res = await this.pool.query(
             `UPDATE cart_items SET quantity = $1, updated_at = NOW() WHERE cart_item_id = $2 AND user_id = $3 RETURNING *`,
             [quantity, cartItemId, userId]
         );
-        if (res.rowCount === 0) throw new NotFoundException('Cart item not found');
         return res.rows[0];
     }
 
@@ -309,29 +353,34 @@ export class ConsumerService implements OnModuleInit {
             await client.query('BEGIN');
             let totalAmount = 0, farmerId = null;
             
-            // Calculate prices - handle both kg and sack purchases
+            // Calculate prices and validate stock - all quantities in kg
             const itemsWithPrices: any[] = [];
             for (const item of items) {
-                const productRes = await client.query(`SELECT price_per_kg, farmer_id FROM products WHERE product_id = $1`, [item.product_id]);
+                const productRes = await client.query(
+                    `SELECT price_per_kg, farmer_id, available_quantity, variety_name, status FROM products WHERE product_id = $1`,
+                    [item.product_id]
+                );
                 if (productRes.rows.length === 0) throw new NotFoundException(`Product ${item.product_id} not found`);
                 
-                let unitPrice = parseFloat(productRes.rows[0].price_per_kg);
+                const product = productRes.rows[0];
+                const availableQty = parseFloat(product.available_quantity) || 0;
+                const requestedQty = parseFloat(item.quantity) || 0;
                 
-                // If sack_size_kg is specified, get the sack price
-                if (item.sack_size_kg) {
-                    const sackRes = await client.query(
-                        `SELECT price FROM product_sack_sizes WHERE product_id = $1 AND size_kg = $2`,
-                        [item.product_id, item.sack_size_kg]
-                    );
-                    if (sackRes.rows.length > 0) {
-                        unitPrice = parseFloat(sackRes.rows[0].price);
-                    }
+                // Check if product is out of stock
+                if (availableQty <= 0 || product.status === 'OUT_OF_STOCK') {
+                    throw new BadRequestException(`${product.variety_name} is out of stock`);
                 }
                 
-                const subtotal = unitPrice * item.quantity;
+                // Validate quantity doesn't exceed available stock
+                if (requestedQty > availableQty) {
+                    throw new BadRequestException(`Insufficient stock for ${product.variety_name}. Requested: ${requestedQty} kg, Available: ${availableQty} kg`);
+                }
+                
+                const unitPrice = parseFloat(product.price_per_kg);
+                const subtotal = unitPrice * requestedQty;
                 totalAmount += subtotal;
-                farmerId = productRes.rows[0].farmer_id;
-                itemsWithPrices.push({ ...item, unitPrice, subtotal });
+                farmerId = product.farmer_id;
+                itemsWithPrices.push({ ...item, unitPrice, subtotal, availableQty, varietyName: product.variety_name });
             }
             
             const orderRes = await client.query(
@@ -340,11 +389,20 @@ export class ConsumerService implements OnModuleInit {
             );
             const order = orderRes.rows[0];
             
-            // Insert order items with correct prices
+            // Insert order items and update product stock
             for (const item of itemsWithPrices) {
                 await client.query(
-                    `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, sack_size_kg) VALUES ($1, $2, $3, $4, $5, $6)`,
-                    [order.order_id, item.product_id, item.quantity, item.unitPrice, item.subtotal, item.sack_size_kg || null]
+                    `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)`,
+                    [order.order_id, item.product_id, item.quantity, item.unitPrice, item.subtotal]
+                );
+                
+                // Subtract ordered quantity from product's available_quantity
+                const newQuantity = item.availableQty - parseFloat(item.quantity);
+                const newStatus = newQuantity <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE';
+                
+                await client.query(
+                    `UPDATE products SET available_quantity = $1, status = $2, updated_at = NOW() WHERE product_id = $3`,
+                    [Math.max(0, newQuantity), newStatus, item.product_id]
                 );
             }
             
@@ -409,7 +467,8 @@ export class ConsumerService implements OnModuleInit {
              p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
              (SELECT AVG(r.rating) FROM reviews r WHERE r.product_id = p.product_id) as average_rating,
-             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.product_id) as total_reviews
+             (SELECT COUNT(*) FROM reviews r WHERE r.product_id = p.product_id) as total_reviews,
+             CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
              FROM favorites f 
              JOIN products p ON f.product_id = p.product_id 
              LEFT JOIN users u ON p.farmer_id = u.user_id 
@@ -422,7 +481,9 @@ export class ConsumerService implements OnModuleInit {
             ...row,
             images: row.images || [],
             average_rating: row.average_rating ? parseFloat(row.average_rating) : 0,
-            total_reviews: parseInt(row.total_reviews) || 0
+            total_reviews: parseInt(row.total_reviews) || 0,
+            is_out_of_stock: row.is_out_of_stock,
+            available_quantity: parseFloat(row.available_quantity) || 0
         }));
     }
 
@@ -451,11 +512,12 @@ export class ConsumerService implements OnModuleInit {
         const { q, rice_type, min_price, max_price, sort_by, limit = 20, offset = 0 } = query;
         let sql = `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
                    COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
-                   EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+                   EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite,
+                   CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
                    FROM products p 
                    LEFT JOIN users u ON p.farmer_id = u.user_id 
                    LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
-                   WHERE p.status = 'ACTIVE'`;
+                   WHERE (p.status = 'ACTIVE' OR p.status = 'OUT_OF_STOCK')`;
         const params: any[] = [userId];
         let idx = 2; // Start params from 2 since userId is 1
 
@@ -471,7 +533,13 @@ export class ConsumerService implements OnModuleInit {
         sql += ` LIMIT $${idx} OFFSET $${idx + 1}`; params.push(limit, offset);
 
         const res = await this.pool.query(sql, params);
-        return res.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+        return res.rows.map(row => ({ 
+            ...row, 
+            images: row.images || [], 
+            is_favorite: row.is_favorite,
+            is_out_of_stock: row.is_out_of_stock,
+            available_quantity: parseFloat(row.available_quantity) || 0
+        }));
     }
 
     async getProductDetails(productId: number, userId: number) {
@@ -479,7 +547,8 @@ export class ConsumerService implements OnModuleInit {
             `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name, pr.address as farmer_address,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
              COALESCE((SELECT json_agg(json_build_object('sack_size_id', ps.sack_size_id, 'size_kg', ps.size_kg, 'price', ps.price) ORDER BY ps.size_kg) FROM product_sack_sizes ps WHERE ps.product_id = p.product_id), '[]') as sack_sizes,
-             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite,
+             CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
              FROM products p 
              LEFT JOIN users u ON p.farmer_id = u.user_id 
              LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
@@ -488,7 +557,14 @@ export class ConsumerService implements OnModuleInit {
         );
         if (res.rows.length === 0) throw new NotFoundException('Product not found');
         const product = res.rows[0];
-        return { ...product, images: product.images || [], sack_sizes: product.sack_sizes || [], is_favorite: product.is_favorite };
+        return { 
+            ...product, 
+            images: product.images || [], 
+            sack_sizes: product.sack_sizes || [], 
+            is_favorite: product.is_favorite,
+            is_out_of_stock: product.is_out_of_stock,
+            available_quantity: parseFloat(product.available_quantity) || 0
+        };
     }
 
     async getHomepageData(userId: number) {
@@ -508,32 +584,47 @@ export class ConsumerService implements OnModuleInit {
         );
 
         // Fetch Popular Varieties (e.g. highest rated or just random selection for now)
+        // Include out of stock products but mark them
         const popularRes = await this.pool.query(
             `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
-             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite,
+             CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
              FROM products p 
              LEFT JOIN users u ON p.farmer_id = u.user_id 
              LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
-             WHERE p.status = 'ACTIVE' 
+             WHERE (p.status = 'ACTIVE' OR p.status = 'OUT_OF_STOCK')
              ORDER BY (SELECT AVG(rating) FROM reviews r WHERE r.product_id = p.product_id) DESC NULLS LAST
              LIMIT 10`,
             [userId]
         );
-        const popular_varieties = popularRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+        const popular_varieties = popularRes.rows.map(row => ({ 
+            ...row, 
+            images: row.images || [], 
+            is_favorite: row.is_favorite,
+            is_out_of_stock: row.is_out_of_stock,
+            available_quantity: parseFloat(row.available_quantity) || 0
+        }));
 
-        // Fetch New Arrivals
+        // Fetch New Arrivals - include out of stock products but mark them
         const newArrivalsRes = await this.pool.query(
             `SELECT p.*, u.email as farmer_email, pr.full_name as farmer_name, pr.farm_name,
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
-             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $1) as is_favorite,
+             CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
              FROM products p 
              LEFT JOIN users u ON p.farmer_id = u.user_id 
              LEFT JOIN profiles pr ON p.farmer_id = pr.user_id
-             WHERE p.status = 'ACTIVE' ORDER BY p.created_at DESC LIMIT 10`,
+             WHERE (p.status = 'ACTIVE' OR p.status = 'OUT_OF_STOCK') ORDER BY p.created_at DESC LIMIT 10`,
             [userId]
         );
-        const new_arrivals = newArrivalsRes.rows.map(row => ({ ...row, images: row.images || [], is_favorite: row.is_favorite }));
+        const new_arrivals = newArrivalsRes.rows.map(row => ({ 
+            ...row, 
+            images: row.images || [], 
+            is_favorite: row.is_favorite,
+            is_out_of_stock: row.is_out_of_stock,
+            available_quantity: parseFloat(row.available_quantity) || 0
+        }));
 
         return {
             featured_farmers: farmersRes.rows,
@@ -561,13 +652,14 @@ export class ConsumerService implements OnModuleInit {
 
         const farmer = farmerRes.rows[0];
 
-        // Get farmer's active products
+        // Get farmer's products - include out of stock but mark them
         const productsRes = await this.pool.query(
             `SELECT p.*, 
              COALESCE((SELECT json_agg(pi.image_url ORDER BY pi.image_order) FROM product_images pi WHERE pi.product_id = p.product_id), '[]') as images,
-             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite
+             EXISTS(SELECT 1 FROM favorites f WHERE f.product_id = p.product_id AND f.user_id = $2) as is_favorite,
+             CASE WHEN p.available_quantity <= 0 OR p.status = 'OUT_OF_STOCK' THEN true ELSE false END as is_out_of_stock
              FROM products p
-             WHERE p.farmer_id = $1 AND p.status = 'ACTIVE'
+             WHERE p.farmer_id = $1 AND (p.status = 'ACTIVE' OR p.status = 'OUT_OF_STOCK')
              ORDER BY p.created_at DESC`,
             [farmerId, userId]
         );
@@ -575,7 +667,9 @@ export class ConsumerService implements OnModuleInit {
         const products = productsRes.rows.map(row => ({
             ...row,
             images: row.images || [],
-            is_favorite: row.is_favorite
+            is_favorite: row.is_favorite,
+            is_out_of_stock: row.is_out_of_stock,
+            available_quantity: parseFloat(row.available_quantity) || 0
         }));
 
         return {

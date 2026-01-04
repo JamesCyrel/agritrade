@@ -50,9 +50,19 @@ export default function ConsumerCartScreen() {
     loadCart();
   };
 
-  const handleUpdateQuantity = async (cartItemId, newQuantity) => {
+  const handleUpdateQuantity = async (cartItemId, newQuantity, availableQuantity, productName) => {
     if (parseFloat(newQuantity) <= 0) {
       handleRemoveItem(cartItemId);
+      return;
+    }
+
+    // Check if exceeding available quantity
+    if (availableQuantity !== undefined && parseFloat(newQuantity) > parseFloat(availableQuantity)) {
+      Alert.alert(
+        "Quantity Limit Exceeded",
+        `Sorry, only ${availableQuantity} kg of ${productName || 'this product'} is available. You cannot add more than the available stock.`,
+        [{ text: "OK", style: "default" }]
+      );
       return;
     }
 
@@ -62,7 +72,16 @@ export default function ConsumerCartScreen() {
       if (res.success) {
         await loadCart();
       } else {
-        Alert.alert("Error", res.message || "Failed to update quantity");
+        // Check if error is about stock limit
+        if (res.message && res.message.toLowerCase().includes('available')) {
+          Alert.alert(
+            "Quantity Limit Exceeded",
+            res.message,
+            [{ text: "OK", style: "default" }]
+          );
+        } else {
+          Alert.alert("Error", res.message || "Failed to update quantity");
+        }
       }
     } catch (error) {
       console.error("Update quantity error:", error);
@@ -141,49 +160,70 @@ export default function ConsumerCartScreen() {
           </View>
         ) : (
           <>
-            {cartData.items.map((item) => (
-              <View key={item.cart_item_id} style={styles.cartItem}>
-                {item.images && item.images.length > 0 ? (
-                  <Image source={{ uri: getImageUrl(item.images[0]) }} style={styles.itemImage} />
-                ) : (
-                  <View style={styles.itemImage}>
-                    <Wheat size={40} color="#ccc" />
-                  </View>
-                )}
-                <View style={styles.itemDetails}>
-                  <Text style={styles.itemName}>{item.variety_name}</Text>
-                  <Text style={styles.itemFarm}>{item.farm_name || item.farmer_name || "Unknown Farm"}</Text>
-                  <Text style={styles.itemPrice}>
-                    ₱{item.unit_price} {item.sack_size_kg ? `per ${item.sack_size_kg}kg sack` : "per kg"}
-                  </Text>
-                  <Text style={styles.itemType}>{item.rice_type}</Text>
+            {cartData.items.map((item) => {
+              const availableQty = parseFloat(item.available_quantity) || 0;
+              const currentQty = parseFloat(item.quantity) || 0;
+              const isAtMaxQuantity = currentQty >= availableQty;
+              const isOutOfStock = availableQty <= 0;
 
-                  <View style={styles.quantityContainer}>
-                    <TouchableOpacity
-                      style={styles.quantityButton}
-                      onPress={() => handleUpdateQuantity(item.cart_item_id, parseFloat(item.quantity) - 1)}
-                    >
-                      <Text style={styles.quantityButtonText}>−</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.quantityText}>{item.quantity} {item.sack_size_kg ? 'sacks' : 'kg'}</Text>
-                    <TouchableOpacity
-                      style={styles.quantityButton}
-                      onPress={() => handleUpdateQuantity(item.cart_item_id, parseFloat(item.quantity) + 1)}
-                    >
-                      <Text style={styles.quantityButtonText}>+</Text>
-                    </TouchableOpacity>
-                  </View>
+              return (
+                <View key={item.cart_item_id} style={styles.cartItem}>
+                  {item.images && item.images.length > 0 ? (
+                    <Image source={{ uri: getImageUrl(item.images[0]) }} style={styles.itemImage} />
+                  ) : (
+                    <View style={styles.itemImage}>
+                      <Wheat size={40} color="#ccc" />
+                    </View>
+                  )}
+                  <View style={styles.itemDetails}>
+                    <Text style={styles.itemName}>{item.variety_name}</Text>
+                    <Text style={styles.itemFarm}>{item.farm_name || item.farmer_name || "Unknown Farm"}</Text>
+                    <Text style={styles.itemPrice}>₱{item.price_per_kg} per kg</Text>
+                    <Text style={styles.itemType}>{item.rice_type}</Text>
+                    <Text style={styles.availableStock}>
+                      {isOutOfStock ? 'Out of Stock' : `Available: ${availableQty} kg`}
+                    </Text>
 
-                  <Text style={styles.itemTotal}>₱{parseFloat(item.item_total || 0).toFixed(2)}</Text>
+                    <View style={styles.quantityContainer}>
+                      <TouchableOpacity
+                        style={styles.quantityButton}
+                        onPress={() => handleUpdateQuantity(item.cart_item_id, currentQty - 1, availableQty, item.variety_name)}
+                      >
+                        <Text style={styles.quantityButtonText}>−</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.quantityText}>{item.quantity} kg</Text>
+                      <TouchableOpacity
+                        style={[styles.quantityButton, isAtMaxQuantity && styles.quantityButtonDisabled]}
+                        onPress={() => {
+                          if (isAtMaxQuantity) {
+                            Alert.alert(
+                              "Quantity Limit Exceeded",
+                              `Sorry, only ${availableQty} kg of ${item.variety_name || 'this product'} is available. You cannot add more than the available stock.`,
+                              [{ text: "OK", style: "default" }]
+                            );
+                          } else {
+                            handleUpdateQuantity(item.cart_item_id, currentQty + 1, availableQty, item.variety_name);
+                          }
+                        }}
+                      >
+                        <Text style={[styles.quantityButtonText, isAtMaxQuantity && styles.quantityButtonTextDisabled]}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {isAtMaxQuantity && !isOutOfStock && (
+                      <Text style={styles.maxQuantityWarning}>Maximum quantity reached</Text>
+                    )}
+
+                    <Text style={styles.itemTotal}>₱{parseFloat(item.item_total || 0).toFixed(2)}</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleRemoveItem(item.cart_item_id)}
+                  >
+                    <X size={18} color="#d32f2f" />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleRemoveItem(item.cart_item_id)}
-                >
-                  <X size={18} color="#d32f2f" />
-                </TouchableOpacity>
-              </View>
-            ))}
+              );
+            })}
 
             <View style={styles.summary}>
               <View style={styles.summaryRow}>
@@ -280,8 +320,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  quantityButtonDisabled: {
+    backgroundColor: "#e0e0e0",
+    opacity: 0.5,
+  },
   quantityButtonText: { fontSize: 18, fontWeight: "bold", color: "#333" },
+  quantityButtonTextDisabled: { color: "#999" },
   quantityText: { marginHorizontal: 16, fontSize: 14, color: "#333", minWidth: 60 },
+  availableStock: { fontSize: 11, color: "#666", marginBottom: 4 },
+  maxQuantityWarning: { fontSize: 11, color: "#f44336", marginBottom: 4 },
   itemTotal: { fontSize: 16, fontWeight: "bold", color: "#2d5016" },
   removeButton: {
     width: 32,

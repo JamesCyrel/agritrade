@@ -102,19 +102,26 @@ export default function ConsumerHomeScreen() {
 
     // Use is_favorite directly from product data
     const isFavorite = product.is_favorite;
+    const isOutOfStock = product.is_out_of_stock;
 
     return (
       <TouchableOpacity
         key={product.product_id}
-        style={styles.card}
-        onPress={() => router.push(`/consumer/products/${product.product_id}`)}
+        style={[styles.card, isOutOfStock && styles.cardOutOfStock]}
+        onPress={() => !isOutOfStock && router.push(`/consumer/products/${product.product_id}`)}
+        disabled={isOutOfStock}
       >
         <View style={styles.cardImageContainer}>
           {product.images && Array.isArray(product.images) && product.images.length > 0 ? (
-            <Image source={{ uri: getImageUrl(product.images[0]) }} style={styles.cardImage} />
+            <Image source={{ uri: getImageUrl(product.images[0]) }} style={[styles.cardImage, isOutOfStock && styles.cardImageOutOfStock]} />
           ) : (
-            <View style={styles.cardImage}>
+            <View style={[styles.cardImage, isOutOfStock && styles.cardImageOutOfStock]}>
               <Wheat size={40} color="#ccc" />
+            </View>
+          )}
+          {isOutOfStock && (
+            <View style={styles.outOfStockOverlay}>
+              <Text style={styles.outOfStockText}>Out of Stock</Text>
             </View>
           )}
           <TouchableOpacity
@@ -128,13 +135,13 @@ export default function ConsumerHomeScreen() {
             />
           </TouchableOpacity>
         </View>
-        <Text style={styles.cardTitle} numberOfLines={1}>
+        <Text style={[styles.cardTitle, isOutOfStock && styles.cardTitleOutOfStock]} numberOfLines={1}>
           {String(product.variety_name || "Unknown Variety")}
         </Text>
         <Text style={styles.cardFarmName} numberOfLines={1}>
           {String(product.farm_name || product.farmer_name || "Unknown Farm")}
         </Text>
-        <Text style={styles.cardPrice}>₱{price}/kg</Text>
+        <Text style={[styles.cardPrice, isOutOfStock && styles.cardPriceOutOfStock]}>₱{price}/kg</Text>
         {product.average_rating != null && !isNaN(parseFloat(product.average_rating)) && parseFloat(product.average_rating) > 0 && (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <Star size={14} color="#f1c40f" fill="#f1c40f" />
@@ -365,6 +372,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+  cardOutOfStock: {
+    opacity: 0.7,
+  },
   cardImageContainer: {
     width: "100%",
     height: 120,
@@ -378,6 +388,29 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
+  },
+  cardImageOutOfStock: {
+    opacity: 0.5,
+  },
+  outOfStockOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    borderRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  outOfStockText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 12,
+    backgroundColor: "#f44336",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
   },
   favoriteButton: {
     position: "absolute",
@@ -402,6 +435,9 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 4,
   },
+  cardTitleOutOfStock: {
+    color: "#999",
+  },
   cardFarmName: {
     fontSize: 12,
     color: "#666",
@@ -422,6 +458,9 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#2d5016",
     marginTop: 4,
+  },
+  cardPriceOutOfStock: {
+    color: "#999",
   },
   cardProducts: {
     fontSize: 12,
