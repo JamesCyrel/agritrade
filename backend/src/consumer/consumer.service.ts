@@ -389,11 +389,19 @@ export class ConsumerService implements OnModuleInit {
             );
             const order = orderRes.rows[0];
             
-            // Insert order items (stock deduction happens on delivery, not on order placement)
+            // Insert order items and deduct stock immediately (reserve stock for pending orders)
             for (const item of itemsWithPrices) {
                 await client.query(
                     `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES ($1, $2, $3, $4, $5)`,
                     [order.order_id, item.product_id, item.quantity, item.unitPrice, item.subtotal]
+                );
+                
+                // Deduct from available_quantity immediately to reserve stock
+                const newQuantity = item.availableQty - parseFloat(item.quantity);
+                const newStatus = newQuantity <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE';
+                await client.query(
+                    `UPDATE products SET available_quantity = $1, status = $2, updated_at = NOW() WHERE product_id = $3`,
+                    [Math.max(0, newQuantity), newStatus, item.product_id]
                 );
             }
             
@@ -443,12 +451,50 @@ export class ConsumerService implements OnModuleInit {
     }
 
     async cancelOrder(userId: number, orderId: number) {
-        const res = await this.pool.query(
-            `UPDATE orders SET status = 'CANCELLED', updated_at = NOW() WHERE order_id = $1 AND user_id = $2 AND status = 'PENDING' RETURNING *`,
-            [orderId, userId]
-        );
-        if (res.rowCount === 0) throw new NotFoundException('Order not found or cannot be cancelled');
-        return res.rows[0];
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            
+            // Get order items before cancelling to restore stock
+            const itemsRes = await client.query(
+                `SELECT oi.product_id, oi.quantity FROM order_items oi 
+                 JOIN orders o ON oi.order_id = o.order_id 
+                 WHERE o.order_id = $1 AND o.user_id = $2 AND o.status = 'PENDING'`,
+                [orderId, userId]
+            );
+            
+            if (itemsRes.rowCount === 0) {
+                throw new NotFoundException('Order not found or cannot be cancelled');
+            }
+            
+            // Restore stock for each item
+            for (const item of itemsRes.rows) {
+                await client.query(
+                    `UPDATE products SET 
+                     available_quantity = available_quantity + $1, 
+                     status = 'ACTIVE',
+                     updated_at = NOW() 
+                     WHERE product_id = $2`,
+                    [item.quantity, item.product_id]
+                );
+            }
+            
+            // Update order status to CANCELLED
+            const res = await client.query(
+                `UPDATE orders SET status = 'CANCELLED', updated_at = NOW() 
+                 WHERE order_id = $1 AND user_id = $2 AND status = 'PENDING' 
+                 RETURNING *`,
+                [orderId, userId]
+            );
+            
+            await client.query('COMMIT');
+            return res.rows[0];
+        } catch (e) {
+            await client.query('ROLLBACK');
+            throw e;
+        } finally {
+            client.release();
+        }
     }
 
     async markOrderDelivered(userId: number, orderId: number) {
@@ -470,31 +516,7 @@ export class ConsumerService implements OnModuleInit {
             
             const order = res.rows[0];
             
-            // Get order items to update stock
-            const itemsRes = await client.query(
-                `SELECT oi.product_id, oi.quantity FROM order_items oi WHERE oi.order_id = $1`,
-                [orderId]
-            );
-            
-            // Subtract ordered quantity from product's available_quantity (deduct on delivery)
-            for (const item of itemsRes.rows) {
-                const productRes = await client.query(
-                    `SELECT available_quantity FROM products WHERE product_id = $1`,
-                    [item.product_id]
-                );
-                
-                if (productRes.rows.length > 0) {
-                    const currentQty = parseFloat(productRes.rows[0].available_quantity) || 0;
-                    const newQuantity = currentQty - parseFloat(item.quantity);
-                    const newStatus = newQuantity <= 0 ? 'OUT_OF_STOCK' : 'ACTIVE';
-                    
-                    await client.query(
-                        `UPDATE products SET available_quantity = $1, status = $2, updated_at = NOW() WHERE product_id = $3`,
-                        [Math.max(0, newQuantity), newStatus, item.product_id]
-                    );
-                }
-            }
-            
+            // Stock was already deducted when order was placed, so we just create ledger entry
             // Create earnings ledger entry for the farmer
             await client.query(
                 `INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, description)

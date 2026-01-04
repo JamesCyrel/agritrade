@@ -167,7 +167,27 @@ export class FarmersService implements OnModuleInit {
             LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id
             WHERE o.order_id = $1 AND o.farmer_id = $2
         `, [orderId, farmerId]);
-    return res.rows[0] || null;
+    
+    if (!res.rows[0]) return null;
+    
+    const order = res.rows[0];
+    const totalAmount = parseFloat(order.total_amount) || 0;
+    
+    // Calculate subtotal, delivery fee, and tax from total_amount
+    // Formula: total_amount = subtotal + delivery_fee + tax
+    // Assuming: delivery_fee = 50 (flat fee), tax = 12% of subtotal
+    // So: total = subtotal + 50 + (subtotal * 0.12) = subtotal * 1.12 + 50
+    // Therefore: subtotal = (total - 50) / 1.12
+    const deliveryFee = 50;
+    const subtotal = (totalAmount - deliveryFee) / 1.12;
+    const tax = subtotal * 0.12;
+    
+    return {
+      ...order,
+      subtotal: subtotal.toFixed(2),
+      delivery_fee: deliveryFee.toFixed(2),
+      tax: tax.toFixed(2)
+    };
   }
 
   async acceptOrder(farmerId: number, orderId: number) {
@@ -200,6 +220,19 @@ export class FarmersService implements OnModuleInit {
                 VALUES ($1, $2, $3)
             `, [orderId, reason, notes || null]);
 
+      // Restore stock for rejected order items (stock was reserved at order placement)
+      const orderItems = await client.query(
+        `SELECT product_id, quantity FROM order_items WHERE order_id = $1`,
+        [orderId]
+      );
+
+      for (const item of orderItems.rows) {
+        await client.query(
+          `UPDATE products SET available_quantity = available_quantity + $1, status = 'ACTIVE', updated_at = NOW() WHERE product_id = $2`,
+          [item.quantity, item.product_id]
+        );
+      }
+
       await client.query('COMMIT');
       return orderRes.rows[0];
     } catch (e) {
@@ -216,12 +249,44 @@ export class FarmersService implements OnModuleInit {
       throw new Error(`Invalid status: ${status}`);
     }
 
-    const res = await this.pool.query(`
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const res = await client.query(`
             UPDATE orders SET status = $3, updated_at = NOW()
             WHERE order_id = $1 AND farmer_id = $2
             RETURNING *
         `, [orderId, farmerId, status]);
-    return res.rows[0] || null;
+
+      if (!res.rows[0]) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      // If order is cancelled, restore stock (stock was reserved at order placement)
+      if (status === 'CANCELLED') {
+        const orderItems = await client.query(
+          `SELECT product_id, quantity FROM order_items WHERE order_id = $1`,
+          [orderId]
+        );
+
+        for (const item of orderItems.rows) {
+          await client.query(
+            `UPDATE products SET available_quantity = available_quantity + $1, status = 'ACTIVE', updated_at = NOW() WHERE product_id = $2`,
+            [item.quantity, item.product_id]
+          );
+        }
+      }
+
+      await client.query('COMMIT');
+      return res.rows[0];
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 
   // ===================== Farmer Ledger =====================

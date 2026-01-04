@@ -22,7 +22,7 @@ export class ProductsService implements OnModuleInit {
         price_per_kg DECIMAL(10, 2) NOT NULL,
         available_quantity DECIMAL(10, 2) NOT NULL DEFAULT 0,
         quantity_unit VARCHAR(10) DEFAULT 'KG' CHECK (quantity_unit IN ('KG', 'SACKS')),
-        status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED')),
+        status VARCHAR(20) DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED', 'OUT_OF_STOCK')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -53,7 +53,7 @@ export class ProductsService implements OnModuleInit {
         IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'products_status_check' AND conrelid = 'products'::regclass) THEN
           ALTER TABLE products DROP CONSTRAINT products_status_check;
         END IF;
-        ALTER TABLE products ADD CONSTRAINT products_status_check CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED'));
+        ALTER TABLE products ADD CONSTRAINT products_status_check CHECK (status IN ('ACTIVE', 'INACTIVE', 'ARCHIVED', 'OUT_OF_STOCK'));
       END $$;
 
       DO $$ 

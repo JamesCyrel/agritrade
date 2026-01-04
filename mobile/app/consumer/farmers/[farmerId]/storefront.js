@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI, getImageUrl } from "../../../../services/api";
 import { Tractor, MapPin, Star, Wheat, Heart } from "lucide-react-native";
@@ -25,6 +25,15 @@ export default function FarmerStorefrontScreen() {
   useEffect(() => {
     loadStorefront();
   }, [farmerId]);
+
+  // Refresh storefront data when screen comes into focus to get updated quantities
+  useFocusEffect(
+    React.useCallback(() => {
+      if (farmerId) {
+        loadStorefront();
+      }
+    }, [farmerId])
+  );
 
   const loadStorefront = async () => {
     try {

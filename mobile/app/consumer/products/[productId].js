@@ -57,12 +57,13 @@ export default function ProductDetailScreen() {
     }
   }, [productId]);
 
-  // Refresh favorite status and cart quantity when screen comes into focus
+  // Refresh favorite status, cart quantity, and product data when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (productId) {
         checkFavoriteStatus();
         loadCartQuantity();
+        loadProduct(); // Refresh product data to get updated available_quantity
       }
     }, [productId])
   );
