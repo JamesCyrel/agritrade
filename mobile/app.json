@@ -46,7 +46,7 @@
       "reactCompiler": true
     },
     "extra": {
-      "EXPO_PUBLIC_API_URL": "http://192.168.1.57:3000"
+      "EXPO_PUBLIC_API_URL": "http://10.0.0.52:3000"
     }
   }
 }
