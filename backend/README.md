@@ -27,7 +27,18 @@ npm run start
 Create a `.env` file in the backend directory:
 
 ```env
-# Database
+# Database (Dual Database Architecture)
+# Primary (Supabase) - All writes go here
+PRIMARY_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+
+# Replica (Local PostgreSQL) - Read cache
+REPLICA_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+
+# Sync Configuration
+SYNC_ENABLED=true
+SYNC_INTERVAL_MS=60000
+
+# Legacy support (for backwards compatibility)
 SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
 # JWT
@@ -36,6 +47,66 @@ JWT_SECRET=your-super-secret-jwt-key-change-in-production
 # Server
 PORT=3000
 ```
+
+## 🔄 Dual Database Architecture
+
+The backend supports a **Primary + Replica** architecture:
+
+```
+┌─────────────────┐     WRITE      ┌──────────────────┐
+│  NestJS Backend │ ─────────────► │  Supabase (Primary) │
+└─────────────────┘                └──────────────────┘
+        │                                   │
+        │ READ                              │ Sync (60s)
+        ▼                                   ▼
+┌─────────────────┐                ┌──────────────────┐
+│  Local PostgreSQL│ ◄────────────  │  (Same Data)    │
+│  (Read Cache)    │                └──────────────────┘
+└─────────────────┘
+```
+
+### How it works:
+- **Writes** → Go to Supabase (primary source of truth)
+- **Reads** → Go to local PostgreSQL (faster)
+- **Sync** → Data syncs from Supabase to local every 60 seconds
+
+### Configuration:
+1. Set `PRIMARY_DB_URL` to your Supabase connection pooler URL
+2. Set `REPLICA_DB_URL` to your local PostgreSQL
+3. Set `SYNC_ENABLED=true` to enable periodic sync
+
+### Usage in code:
+```typescript
+// Inject DatabaseService
+constructor(private db: DatabaseService) {}
+
+// Auto-routing based on query type
+await this.db.query('SELECT * FROM users');  // → local cache
+await this.db.query('INSERT INTO users...'); // → Supabase
+
+// Force specific database
+await this.db.queryPrimary('SELECT ...');    // → Supabase
+await this.db.queryReplica('SELECT ...');    // → local
+```
+
+## 🐳 Docker Support
+
+Start the database and backend with Docker:
+
+```bash
+# Start all services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop services
+docker compose down
+```
+
+Services:
+- PostgreSQL: `localhost:5433`
+- Backend API: `localhost:3001`
 
 ## 📦 Available Scripts
 

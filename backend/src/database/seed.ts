@@ -6,8 +6,12 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 
 async function seed() {
+    const connectionString = process.env.PRIMARY_DB_URL || process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+    const isLocal = connectionString?.includes('localhost') || connectionString?.includes('127.0.0.1');
+
     const pool = new Pool({
-        connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
+        connectionString,
+        ssl: isLocal ? false : { rejectUnauthorized: false },
     });
 
     console.log('🌱 Starting database seeding...\n');
@@ -157,7 +161,7 @@ async function seed() {
 
         // Seed Platform Settings (CRITICAL - app will fail without these)
         console.log('⚙️  Creating platform settings...');
-        
+
         // Commission Settings (5% platform fee)
         await pool.query(
             `INSERT INTO commission_settings (commission_rate, min_commission, updated_at) 

@@ -125,25 +125,46 @@ Before starting, make sure you have installed:
    - Create a new file named ".env" in agritrade/backend/
    - Add the following content (update with your credentials):
    
-     DB_HOST=localhost
-     DB_PORT=5432
-     DB_NAME=agritrader
-     DB_USER=postgres
-     DB_PASSWORD=your_postgres_password
-     JWT_SECRET=your_random_secret_key_here
-     PORT=3000
+     # Database (Dual Database Architecture)
+     # Primary (Supabase) - All writes go here
+     PRIMARY_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
      
-     # Supabase Configuration (optional - for cloud database)
-     SUPABASE_URL=your_supabase_url
-     SUPABASE_ANON_KEY=your_supabase_anon_key
-     SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-     SUPABASE_DB_URL=postgresql://postgres:password@localhost:5432/agritrader
+     # Replica (Local PostgreSQL) - Read cache
+     REPLICA_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+     
+     # Sync Configuration
+     SYNC_ENABLED=true
+     SYNC_INTERVAL_MS=60000
+     
+     # Legacy support (for backwards compatibility)
+     SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+     
+     # JWT Secret - Change this in production!
+     JWT_SECRET=your-super-secret-jwt-key-change-in-production
+     
+     # Server Port
+     PORT=3000
    
-   Note: Replace "your_postgres_password" with your actual PostgreSQL password
-   Note: Replace "your_random_secret_key_here" with a secure random string
-         (You can generate one at: https://randomkeygen.com/)
-   Note: For local development, use local PostgreSQL credentials
-   Note: SUPABASE_DB_URL is used by the seed script
+   DUAL DATABASE ARCHITECTURE:
+   
+   The backend supports Supabase as primary + local PostgreSQL as read cache:
+   
+   - PRIMARY_DB_URL: Your Supabase connection pooler URL (port 6543)
+     Get this from: Supabase Dashboard > Settings > Database > Connection string
+     Select "Transaction Pooler" and copy the URI
+   
+   - REPLICA_DB_URL: Your local PostgreSQL for faster reads
+   
+   - SYNC_ENABLED: Set to "true" to enable automatic sync
+   
+   - SYNC_INTERVAL_MS: How often to sync (default: 60000 = 1 minute)
+   
+   How it works:
+   - All WRITE queries (INSERT, UPDATE, DELETE) go to Supabase
+   - All READ queries (SELECT) go to local PostgreSQL
+   - Data syncs from Supabase to local every 60 seconds
+   
+   Note: To use local database only (development), set both URLs to local:
 
 4. Seed the database with test data:
    npm run seed
@@ -546,8 +567,39 @@ Mobile Commands (run from agritrade/mobile):
   npm run lint             # Run linter
 
 ================================================================================
-                    DEVELOPMENT WORKFLOW
+                        DOCKER SETUP (OPTIONAL)
 ================================================================================
+
+Docker provides an easy way to run the database and backend without local setup.
+
+1. Install Docker:
+   - Download from: https://www.docker.com/products/docker-desktop
+   - Or on Linux: sudo pacman -S docker docker-compose (Arch)
+                  sudo apt install docker.io docker-compose-v2 (Ubuntu)
+
+2. Start Docker service:
+   - Linux: sudo systemctl start docker
+   - Windows/Mac: Docker Desktop should start automatically
+
+3. Run with Docker Compose:
+   cd agritrade
+   docker compose up --build
+
+   This starts:
+   - PostgreSQL database on port 5433
+   - Backend API on port 3001
+
+4. Stop services:
+   docker compose down
+
+5. Reset database (removes all data):
+   docker compose down -v
+
+Note: Docker ports are offset (5433/3001 instead of 5432/3000) to avoid
+conflicts with local development servers.
+
+================================================================================
+                    DEVELOPMENT WORKFLOW
 
 Daily Development:
 
