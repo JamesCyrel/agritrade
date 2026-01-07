@@ -30,6 +30,13 @@ services:
       db:
         condition: service_healthy
     environment:
+      # Primary DB (Local PostgreSQL container) - All reads/writes
+      - PRIMARY_DB_URL=postgresql://postgres:postgres@db:5432/postgres
+      # Warehouse (Supabase) - Optional, for data warehouse sync
+      # - WAREHOUSE_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@pooler.supabase.com:6543/postgres
+      # Sync disabled by default in Docker (no Supabase connection)
+      - SYNC_ENABLED=false
+      # Legacy support
       - SUPABASE_DB_URL=postgresql://postgres:postgres@db:5432/postgres
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - PORT=3000
