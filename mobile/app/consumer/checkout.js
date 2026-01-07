@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { CheckCircle, ArrowLeft, Banknote, CreditCard, Smartphone, Link } from "lucide-react-native";
 import { consumerAPI } from "../../services/api";
@@ -45,19 +46,21 @@ export default function CheckoutScreen() {
   const [codEligible, setCodEligible] = useState(false);
   const [checkingCodEligibility, setCheckingCodEligibility] = useState(false);
 
-  useEffect(() => {
-    // Always reset to ADDRESS when component mounts
-    setCurrentStep(CHECKOUT_STEPS.ADDRESS);
-    setSelectedAddressId(null);
-    setSelectedPaymentId(null);
-    setPromoCode("");
-    setAppliedPromo(null);
-    setNotes("");
-    setPlacingOrder(false);
-    setOrderJustPlaced(false);
-    setCodEligible(false);
-    loadCheckoutData();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      // Always reset to ADDRESS when screen is focused
+      setCurrentStep(CHECKOUT_STEPS.ADDRESS);
+      setSelectedAddressId(null);
+      setSelectedPaymentId(null);
+      setPromoCode("");
+      setAppliedPromo(null);
+      setNotes("");
+      setPlacingOrder(false);
+      setOrderJustPlaced(false);
+      setCodEligible(false);
+      loadCheckoutData();
+    }, [])
+  );
 
   // Check COD eligibility when cart data is loaded
   useEffect(() => {

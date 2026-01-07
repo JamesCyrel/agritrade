@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   TextInput,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { consumerAPI, getImageUrl } from "../../services/api";
 import { Wheat, X } from "lucide-react-native";
@@ -41,9 +42,11 @@ export default function ConsumerCartScreen() {
     }
   };
 
-  useEffect(() => {
-    loadCart();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadCart();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
