@@ -125,18 +125,18 @@ Before starting, make sure you have installed:
    - Create a new file named ".env" in agritrade/backend/
    - Add the following content (update with your credentials):
    
-     # Database (Dual Database Architecture)
-     # Primary (Supabase) - All writes go here
-     PRIMARY_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+     # Primary Database (Local PostgreSQL) - All reads/writes
+     PRIMARY_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
      
-     # Replica (Local PostgreSQL) - Read cache
-     REPLICA_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+     # Data Warehouse (Supabase) - Optional, for backup/analytics
+     # Uncomment to enable warehouse sync:
+     # WAREHOUSE_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@pooler.supabase.com:6543/postgres
      
-     # Sync Configuration
-     SYNC_ENABLED=true
+     # Sync Configuration (disabled by default)
+     SYNC_ENABLED=false
      SYNC_INTERVAL_MS=60000
      
-     # Legacy support (for backwards compatibility)
+     # Legacy support
      SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
      
      # JWT Secret - Change this in production!
@@ -145,26 +145,22 @@ Before starting, make sure you have installed:
      # Server Port
      PORT=3000
    
-   DUAL DATABASE ARCHITECTURE:
+   DATABASE ARCHITECTURE:
    
-   The backend supports Supabase as primary + local PostgreSQL as read cache:
+   The backend uses LOCAL PostgreSQL as the primary database:
    
-   - PRIMARY_DB_URL: Your Supabase connection pooler URL (port 6543)
-     Get this from: Supabase Dashboard > Settings > Database > Connection string
-     Select "Transaction Pooler" and copy the URI
+   - PRIMARY_DB_URL: Your local PostgreSQL (all reads/writes go here)
+     Default: postgresql://postgres:postgres@localhost:5432/postgres
    
-   - REPLICA_DB_URL: Your local PostgreSQL for faster reads
+   - WAREHOUSE_DB_URL: (Optional) Supabase for backup/analytics
+     Get from: Supabase Dashboard > Settings > Database > Connection string
    
-   - SYNC_ENABLED: Set to "true" to enable automatic sync
+   - SYNC_ENABLED: Set to "true" to enable warehouse sync to Supabase
    
-   - SYNC_INTERVAL_MS: How often to sync (default: 60000 = 1 minute)
-   
-   How it works:
-   - All WRITE queries (INSERT, UPDATE, DELETE) go to Supabase
-   - All READ queries (SELECT) go to local PostgreSQL
-   - Data syncs from Supabase to local every 60 seconds
-   
-   Note: To use local database only (development), set both URLs to local:
+   Database GUI Tools (all work with PostgreSQL):
+   - Navicat, pgAdmin, DBeaver, TablePlus
+   - Connect to localhost:5432 (or 5433 if using Docker)
+
 
 4. Seed the database with test data:
    npm run seed

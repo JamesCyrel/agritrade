@@ -27,18 +27,17 @@ npm run start
 Create a `.env` file in the backend directory:
 
 ```env
-# Database (Dual Database Architecture)
-# Primary (Supabase) - All writes go here
-PRIMARY_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+# Primary Database (Local PostgreSQL) - All reads/writes
+PRIMARY_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
-# Replica (Local PostgreSQL) - Read cache
-REPLICA_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
+# Data Warehouse (Supabase) - Optional, for backup/analytics
+# WAREHOUSE_DB_URL=postgresql://postgres.[PROJECT]:[PASSWORD]@pooler.supabase.com:6543/postgres
 
-# Sync Configuration
-SYNC_ENABLED=true
+# Sync Configuration (Local → Supabase)
+SYNC_ENABLED=false
 SYNC_INTERVAL_MS=60000
 
-# Legacy support (for backwards compatibility)
+# Legacy support
 SUPABASE_DB_URL=postgresql://postgres:postgres@localhost:5432/postgres
 
 # JWT
@@ -48,45 +47,41 @@ JWT_SECRET=your-super-secret-jwt-key-change-in-production
 PORT=3000
 ```
 
-## 🔄 Dual Database Architecture
+## 🔄 Database Architecture
 
-The backend supports a **Primary + Replica** architecture:
+The backend uses **Local PostgreSQL as primary** with optional Supabase data warehouse:
 
 ```
-┌─────────────────┐     WRITE      ┌──────────────────┐
-│  NestJS Backend │ ─────────────► │  Supabase (Primary) │
-└─────────────────┘                └──────────────────┘
-        │                                   │
-        │ READ                              │ Sync (60s)
-        ▼                                   ▼
-┌─────────────────┐                ┌──────────────────┐
-│  Local PostgreSQL│ ◄────────────  │  (Same Data)    │
-│  (Read Cache)    │                └──────────────────┘
-└─────────────────┘
+┌─────────────────┐     READ/WRITE     ┌──────────────────────┐
+│  NestJS Backend │ ◄────────────────► │  Local PostgreSQL    │
+└─────────────────┘                    │  (Primary)           │
+                                       └──────────────────────┘
+                                               │
+                                               │ Sync (optional)
+                                               ▼
+                                       ┌──────────────────────┐
+                                       │  Supabase            │
+                                       │  (Data Warehouse)    │
+                                       └──────────────────────┘
 ```
 
 ### How it works:
-- **Writes** → Go to Supabase (primary source of truth)
-- **Reads** → Go to local PostgreSQL (faster)
-- **Sync** → Data syncs from Supabase to local every 60 seconds
+- **All operations** → Local PostgreSQL (fast, zero latency)
+- **Warehouse sync** → Optional periodic backup to Supabase
 
 ### Configuration:
-1. Set `PRIMARY_DB_URL` to your Supabase connection pooler URL
-2. Set `REPLICA_DB_URL` to your local PostgreSQL
-3. Set `SYNC_ENABLED=true` to enable periodic sync
+1. Set `PRIMARY_DB_URL` to your local PostgreSQL
+2. Optionally set `WAREHOUSE_DB_URL` for Supabase backup
+3. Set `SYNC_ENABLED=true` to enable warehouse sync
 
 ### Usage in code:
 ```typescript
 // Inject DatabaseService
 constructor(private db: DatabaseService) {}
 
-// Auto-routing based on query type
-await this.db.query('SELECT * FROM users');  // → local cache
-await this.db.query('INSERT INTO users...'); // → Supabase
-
-// Force specific database
-await this.db.queryPrimary('SELECT ...');    // → Supabase
-await this.db.queryReplica('SELECT ...');    // → local
+// All queries go to local PostgreSQL
+await this.db.query('SELECT * FROM users');
+await this.db.query('INSERT INTO users...');
 ```
 
 ## 🐳 Docker Support
