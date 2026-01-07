@@ -1,11 +1,13 @@
-import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
+import { Injectable, Inject, OnModuleInit, Optional } from '@nestjs/common';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
 
 /**
- * SyncService handles one-way data synchronization from Supabase (primary) to local PostgreSQL (replica).
+ * SyncService handles one-way data synchronization from local PostgreSQL (primary) to Supabase (warehouse).
  * 
- * This ensures the local read cache stays up-to-date with the primary database.
+ * Architecture: Local Primary → Supabase Data Warehouse
+ * - All reads/writes happen on local PostgreSQL (fast, low latency)
+ * - Data is periodically synced to Supabase for backup/analytics
  */
 @Injectable()
 export class SyncService implements OnModuleInit {
@@ -45,7 +47,7 @@ export class SyncService implements OnModuleInit {
 
     constructor(
         @Inject('PRIMARY_POOL') private readonly primaryPool: Pool,
-        @Inject('REPLICA_POOL') private readonly replicaPool: Pool,
+        @Optional() @Inject('WAREHOUSE_POOL') private readonly warehousePool: Pool | null,
         private readonly configService: ConfigService,
     ) { }
 
@@ -53,53 +55,66 @@ export class SyncService implements OnModuleInit {
         const syncEnabled = this.configService.get<string>('SYNC_ENABLED', 'false') === 'true';
         const syncIntervalMs = parseInt(this.configService.get<string>('SYNC_INTERVAL_MS', '60000'), 10);
 
+        if (!this.warehousePool) {
+            console.log('📦 Warehouse sync disabled - WAREHOUSE_DB_URL not configured');
+            return;
+        }
+
         if (syncEnabled) {
-            console.log(`🔄 Sync service enabled - syncing every ${syncIntervalMs / 1000}s`);
-            await this.syncAll();
-            this.syncInterval = setInterval(() => this.syncAll(), syncIntervalMs);
+            console.log(`� Warehouse sync enabled - syncing to Supabase every ${syncIntervalMs / 1000}s`);
+            // Initial sync after a delay to allow app to start
+            setTimeout(() => this.syncToWarehouse(), 5000);
+            this.syncInterval = setInterval(() => this.syncToWarehouse(), syncIntervalMs);
         } else {
-            console.log('🔄 Sync service disabled - set SYNC_ENABLED=true to enable');
+            console.log('� Warehouse sync disabled - set SYNC_ENABLED=true to enable');
         }
     }
 
     /**
-     * Sync all tables from primary to replica
+     * Sync all tables from local (primary) to Supabase (warehouse)
      */
-    async syncAll(): Promise<void> {
+    async syncToWarehouse(): Promise<void> {
+        if (!this.warehousePool) {
+            console.log('⚠️ Warehouse pool not configured, skipping sync');
+            return;
+        }
+
         if (this.isSyncing) {
             console.log('⏳ Sync already in progress, skipping...');
             return;
         }
 
         this.isSyncing = true;
-        console.log('🔄 Starting full sync from Supabase to local...');
+        console.log('� Starting sync to Supabase warehouse...');
 
         try {
             for (const table of this.tables) {
-                await this.syncTable(table);
+                await this.syncTableToWarehouse(table);
             }
-            console.log('✅ Full sync completed');
+            console.log('✅ Warehouse sync completed');
         } catch (error) {
-            console.error('❌ Sync failed:', error.message);
+            console.error('❌ Warehouse sync failed:', error.message);
         } finally {
             this.isSyncing = false;
         }
     }
 
     /**
-     * Sync a single table from primary to replica
+     * Sync a single table from local to warehouse
      */
-    async syncTable(tableName: string): Promise<void> {
+    async syncTableToWarehouse(tableName: string): Promise<void> {
+        if (!this.warehousePool) return;
+
         try {
-            // Get all data from primary
+            // Get all data from local primary
             const result = await this.primaryPool.query(`SELECT * FROM ${tableName}`);
 
             if (result.rows.length === 0) {
                 return;
             }
 
-            // Clear local table and insert fresh data
-            await this.replicaPool.query(`DELETE FROM ${tableName}`);
+            // Clear warehouse table and insert fresh data
+            await this.warehousePool.query(`DELETE FROM ${tableName}`);
 
             // Build bulk insert
             const columns = Object.keys(result.rows[0]);
@@ -109,15 +124,22 @@ export class SyncService implements OnModuleInit {
 
             const values = result.rows.flatMap(row => columns.map(col => row[col]));
 
-            await this.replicaPool.query(
+            await this.warehousePool.query(
                 `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES ${placeholders}`,
                 values
             );
 
-            console.log(`  ✓ ${tableName}: ${result.rows.length} rows synced`);
+            console.log(`  ✓ ${tableName}: ${result.rows.length} rows → warehouse`);
         } catch (error) {
             console.error(`  ✗ ${tableName}: ${error.message}`);
         }
+    }
+
+    /**
+     * Legacy method for backwards compatibility
+     */
+    async syncAll(): Promise<void> {
+        return this.syncToWarehouse();
     }
 
     /**
@@ -125,7 +147,7 @@ export class SyncService implements OnModuleInit {
      */
     async syncAfterWrite(tables: string[]): Promise<void> {
         for (const table of tables) {
-            await this.syncTable(table);
+            await this.syncTableToWarehouse(table);
         }
     }
 

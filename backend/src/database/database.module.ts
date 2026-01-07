@@ -8,33 +8,13 @@ import { SyncService } from './sync.service';
 @Module({
     imports: [ConfigModule],
     providers: [
-        // Primary Pool (Supabase) - All writes go here
+        // Primary Pool (Local PostgreSQL) - All reads/writes go here
         {
             provide: 'PRIMARY_POOL',
             useFactory: (configService: ConfigService) => {
                 const connectionString = configService.get<string>('PRIMARY_DB_URL');
                 if (!connectionString) {
-                    throw new Error('PRIMARY_DB_URL is missing - Supabase connection required');
-                }
-                return new Pool({
-                    connectionString,
-                    ssl: { rejectUnauthorized: false }, // Required for Supabase
-                });
-            },
-            inject: [ConfigService],
-        },
-        // Replica Pool (Local) - Read cache
-        {
-            provide: 'REPLICA_POOL',
-            useFactory: (configService: ConfigService) => {
-                const connectionString = configService.get<string>('REPLICA_DB_URL');
-                if (!connectionString) {
-                    console.warn('REPLICA_DB_URL not set - using PRIMARY_DB_URL for reads');
-                    const primaryUrl = configService.get<string>('PRIMARY_DB_URL');
-                    return new Pool({
-                        connectionString: primaryUrl,
-                        ssl: { rejectUnauthorized: false },
-                    });
+                    throw new Error('PRIMARY_DB_URL is missing - Local PostgreSQL connection required');
                 }
                 // Local DB typically doesn't need SSL
                 const isLocal = connectionString.includes('localhost') || connectionString.includes('127.0.0.1');
@@ -45,15 +25,37 @@ import { SyncService } from './sync.service';
             },
             inject: [ConfigService],
         },
+        // Warehouse Pool (Supabase) - Sync target for data warehouse
+        {
+            provide: 'WAREHOUSE_POOL',
+            useFactory: (configService: ConfigService) => {
+                const connectionString = configService.get<string>('WAREHOUSE_DB_URL');
+                if (!connectionString) {
+                    console.warn('WAREHOUSE_DB_URL not set - data warehouse sync disabled');
+                    return null;
+                }
+                return new Pool({
+                    connectionString,
+                    ssl: { rejectUnauthorized: false }, // Required for Supabase
+                });
+            },
+            inject: [ConfigService],
+        },
         // Legacy support - DATABASE_POOL points to PRIMARY for backwards compatibility
         {
             provide: 'DATABASE_POOL',
             useFactory: (primaryPool: Pool) => primaryPool,
             inject: ['PRIMARY_POOL'],
         },
+        // Legacy support - REPLICA_POOL points to PRIMARY (no read replica in this mode)
+        {
+            provide: 'REPLICA_POOL',
+            useFactory: (primaryPool: Pool) => primaryPool,
+            inject: ['PRIMARY_POOL'],
+        },
         DatabaseService,
         SyncService,
     ],
-    exports: ['PRIMARY_POOL', 'REPLICA_POOL', 'DATABASE_POOL', DatabaseService, SyncService],
+    exports: ['PRIMARY_POOL', 'WAREHOUSE_POOL', 'REPLICA_POOL', 'DATABASE_POOL', DatabaseService, SyncService],
 })
 export class DatabaseModule { }
