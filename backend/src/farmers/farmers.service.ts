@@ -224,12 +224,12 @@ export class FarmersService implements OnModuleInit {
             LEFT JOIN consumer_addresses ca ON o.address_id = ca.address_id
             WHERE o.order_id = $1 AND o.farmer_id = $2
         `, [orderId, farmerId]);
-    
+
     if (!res.rows[0]) return null;
-    
+
     const order = res.rows[0];
     const totalAmount = parseFloat(order.total_amount) || 0;
-    
+
     // Calculate subtotal, delivery fee, and tax from total_amount
     // Formula: total_amount = subtotal + delivery_fee + tax
     // Assuming: delivery_fee = 50 (flat fee), tax = 12% of subtotal
@@ -238,7 +238,7 @@ export class FarmersService implements OnModuleInit {
     const deliveryFee = 50;
     const subtotal = (totalAmount - deliveryFee) / 1.12;
     const tax = subtotal * 0.12;
-    
+
     return {
       ...order,
       subtotal: subtotal.toFixed(2),
@@ -249,7 +249,7 @@ export class FarmersService implements OnModuleInit {
 
   async acceptOrder(farmerId: number, orderId: number) {
     const res = await this.pool.query(`
-            UPDATE orders SET status = 'OUT_FOR_DELIVERY', updated_at = NOW()
+            UPDATE orders SET status = 'CONFIRMED', updated_at = NOW()
             WHERE order_id = $1 AND farmer_id = $2 AND status = 'PENDING'
             RETURNING *
         `, [orderId, farmerId]);
@@ -301,7 +301,7 @@ export class FarmersService implements OnModuleInit {
   }
 
   async updateOrderStatus(farmerId: number, orderId: number, status: string) {
-    const validStatuses = ['ACCEPTED', 'PROCESSING', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+    const validStatuses = ['CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED', 'REJECTED'];
     if (!validStatuses.includes(status)) {
       throw new Error(`Invalid status: ${status}`);
     }
@@ -349,7 +349,7 @@ export class FarmersService implements OnModuleInit {
   // ===================== Farmer Ledger =====================
   async getLedger(farmerId: number) {
     console.log('getLedger called for farmerId:', farmerId);
-    
+
     // Backfill: Create ledger entries for delivered orders that don't have them
     await this.pool.query(`
       INSERT INTO farmer_ledger (farmer_id, order_id, amount, transaction_type, balance_before, balance_after, description, created_at)
@@ -359,7 +359,7 @@ export class FarmersService implements OnModuleInit {
       WHERE o.farmer_id = $1 AND o.status = 'DELIVERED'
         AND NOT EXISTS (SELECT 1 FROM farmer_ledger fl WHERE fl.order_id = o.order_id AND fl.transaction_type = 'EARNING')
     `, [farmerId]);
-    
+
     const ledgerRes = await this.pool.query(`
             SELECT fl.*, o.order_id, o.total_amount as order_total
             FROM farmer_ledger fl
@@ -368,7 +368,7 @@ export class FarmersService implements OnModuleInit {
             ORDER BY fl.created_at DESC
         `, [farmerId]);
     console.log('Ledger entries found:', ledgerRes.rowCount);
-    
+
     // Calculate current balance by summing all entries
     // EARNING is positive, others (PAYOUT, COMMISSION, REFUND, COD_FEE) are negative
     const balanceRes = await this.pool.query(`
@@ -379,7 +379,7 @@ export class FarmersService implements OnModuleInit {
             WHERE farmer_id = $1
         `, [farmerId]);
     console.log('Current balance:', balanceRes.rows[0]?.current_balance);
-    
+
     return {
       ledger: ledgerRes.rows,
       currentBalance: parseFloat(balanceRes.rows[0]?.current_balance || 0)

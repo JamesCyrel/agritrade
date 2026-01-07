@@ -399,6 +399,7 @@ CREATE INDEX IF NOT EXISTS idx_reviews_order_id ON reviews(order_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_consumer_id ON reviews(consumer_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_farmer_id ON reviews(farmer_id);
 CREATE INDEX IF NOT EXISTS idx_reviews_product_id ON reviews(product_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_reviews_order_consumer ON reviews(order_id, consumer_id);
 
 -- Disputes Table
 CREATE TABLE IF NOT EXISTS disputes (

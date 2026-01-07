@@ -11,7 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { authAPI } from "../../services/api";
+import { authAPI, farmerAPI } from "../../services/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Cross-platform alert helper
@@ -68,8 +68,32 @@ export default function LoginScreen() {
         await AsyncStorage.setItem('authToken', response.data.token);
         await AsyncStorage.setItem('userData', JSON.stringify(response.data.user));
 
-        // If farmer and not approved, send to setup/verification
+        // If farmer, check if profile is complete
         if (response.data.user.role === 'FARMER') {
+          try {
+            // Fetch farmer profile to check if setup is complete
+            const profileResponse = await farmerAPI.getProfile(response.data.token);
+            const profile = profileResponse?.data || {};
+            
+            // Check if required profile fields are missing
+            const isProfileIncomplete = !profile.farm_name || 
+                                      !profile.address || 
+                                      !profile.bank_account_number || 
+                                      !profile.bank_name || 
+                                      !profile.branch_code;
+            
+            if (isProfileIncomplete) {
+              // Redirect to profile setup if incomplete
+              router.replace('/farmer/profile-setup');
+              return;
+            }
+          } catch (error) {
+            // If profile fetch fails, assume incomplete and send to setup
+            console.error('Error fetching farmer profile:', error);
+            router.replace('/farmer/profile-setup');
+            return;
+          }
+          // Profile is complete, go to profile page
           router.replace('/farmer/profile');
           return;
         }
