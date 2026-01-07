@@ -127,7 +127,7 @@ export default function UserDetailScreen() {
     );
   }
 
-  const isSuspended = user.is_suspended === true;
+  const isSuspended = user.verification_status === 'SUSPENDED';
 
   return (
     <ScrollView style={styles.container}>

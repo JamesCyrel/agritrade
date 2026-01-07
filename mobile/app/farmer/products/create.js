@@ -123,7 +123,25 @@ export default function CreateProductScreen() {
     );
   };
 
-  const handleImageSelected = (uri, index) => {
+  const handleImageSelected = async (uri, index) => {
+    // Check file size (10MB limit)
+    try {
+      const fileInfo = await FileSystem.getInfoAsync(uri);
+      if (fileInfo.exists && fileInfo.size) {
+        const fileSizeMB = fileInfo.size / (1024 * 1024);
+        if (fileSizeMB > 10) {
+          Alert.alert(
+            "Image Too Large",
+            `The selected image is ${fileSizeMB.toFixed(1)}MB. Please select an image smaller than 10MB.`
+          );
+          return;
+        }
+      }
+    } catch (error) {
+      console.log('Could not check file size:', error);
+      // Continue anyway if we can't check the size
+    }
+
     if (index !== null) {
       // Replace image at index
       const newImages = [...images];

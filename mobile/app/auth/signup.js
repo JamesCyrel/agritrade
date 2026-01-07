@@ -43,6 +43,15 @@ export default function SignupScreen() {
       return;
     }
 
+    // Email validation
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        showAlert("Error", "Please enter a valid email address");
+        return;
+      }
+    }
+
     if (password.length < 8) {
       showAlert("Error", "Password must be at least 8 characters long");
       return;
