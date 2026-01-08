@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  RefreshControl,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerOrderAPI, productAPI, farmerAPI, farmerReviewAPI } from "../../services/api";
 import { AlertTriangle, Star } from "lucide-react-native";
@@ -14,14 +15,23 @@ import { AlertTriangle, Star } from "lucide-react-native";
 export default function FarmerHomeScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [activeProducts, setActiveProducts] = useState(0);
   const [currentBalance, setCurrentBalance] = useState(0);
   const [avgRating, setAvgRating] = useState(null);
   const [recentOrders, setRecentOrders] = useState([]);
 
-  useEffect(() => {
-    loadDashboard();
+  useFocusEffect(
+    useCallback(() => {
+      loadDashboard();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadDashboard();
+    setRefreshing(false);
   }, []);
 
   const loadDashboard = async () => {
@@ -63,7 +73,10 @@ export default function FarmerHomeScreen() {
         <Text style={styles.headerSubtitle}>Welcome back! 👋</Text>
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView 
+        style={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2d5016']} />}
+      >
         {pendingCount > 0 && (
           <View style={styles.alertBanner}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>

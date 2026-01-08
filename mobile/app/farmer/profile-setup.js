@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, ScrollView, ActivityIndicator, RefreshControl } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { farmerAPI } from "../../services/api";
 
 export default function FarmerProfileSetup() {
@@ -16,27 +16,37 @@ export default function FarmerProfileSetup() {
   const [coords, setCoords] = useState({ lat: null, lon: null });
   const [loading, setLoading] = useState(false);
   const [locLoading, setLocLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    // Try get current profile to prefill
-    (async () => {
-      try {
-        const token = await AsyncStorage.getItem('authToken');
-        if (!token) return;
-        const res = await farmerAPI.getProfile(token);
-        if (res?.data) {
-          const p = res.data;
-          setFullName(p.full_name || "");
-          setFarmName(p.farm_name || "");
-          setAddress(p.address || "");
-          setBankAccountNumber(p.bank_account_number || "");
-          setBankName(p.bank_name || "");
-          setBranchCode(p.branch_code || "");
-          setCoords({ lat: p.latitude || null, lon: p.longitude || null });
-        }
-      } catch {}
-    })();
+  const fetchProfile = useCallback(async () => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return;
+      const res = await farmerAPI.getProfile(token);
+      if (res?.data) {
+        const p = res.data;
+        setFullName(p.full_name || "");
+        setFarmName(p.farm_name || "");
+        setAddress(p.address || "");
+        setBankAccountNumber(p.bank_account_number || "");
+        setBankName(p.bank_name || "");
+        setBranchCode(p.branch_code || "");
+        setCoords({ lat: p.latitude || null, lon: p.longitude || null });
+      }
+    } catch {}
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [fetchProfile])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchProfile();
+    setRefreshing(false);
+  }, [fetchProfile]);
 
   const captureLocation = async () => {
     try {
@@ -91,7 +101,11 @@ export default function FarmerProfileSetup() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2d5016']} />}
+    >
       <Text style={styles.title}>Farmer Profile Setup</Text>
       <Text style={styles.subtitle}>Complete your profile to start verification</Text>
 
@@ -104,14 +118,15 @@ export default function FarmerProfileSetup() {
       <Text style={styles.label}>Operational Address</Text>
       <TextInput style={[styles.input, styles.multiline]} value={address} onChangeText={setAddress} placeholder="Full address" multiline numberOfLines={3} />
 
+      <Text style={styles.optionalNote}>Location is optional but helps customers find your farm</Text>
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Latitude</Text>
+          <Text style={styles.label}>Latitude (Optional)</Text>
           <TextInput style={styles.input} value={coords.lat ? String(coords.lat) : ""} editable={false} placeholder="Tap capture" />
         </View>
         <View style={{ width: 12 }} />
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Longitude</Text>
+          <Text style={styles.label}>Longitude (Optional)</Text>
           <TextInput style={styles.input} value={coords.lon ? String(coords.lon) : ""} editable={false} placeholder="Tap capture" />
         </View>
       </View>
@@ -145,6 +160,7 @@ const styles = StyleSheet.create({
   input: { backgroundColor: '#fff', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#ddd' },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
   row: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
+  optionalNote: { fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 12 },
   captureButton: { backgroundColor: '#2d5016', borderRadius: 8, padding: 14, alignItems: 'center', marginTop: 12 },
   captureText: { color: '#fff', fontWeight: '600' },
   sectionTitle: { fontSize: 18, fontWeight: '600', color: '#333', marginTop: 20 },

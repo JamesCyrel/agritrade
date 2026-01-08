@@ -58,12 +58,30 @@ export class AdminService {
 
     if (userRes.rows.length === 0) return null;
 
+    const row = userRes.rows[0];
     const docsRes = await this.pool.query(`
             SELECT id, doc_type, file_data, created_at FROM verification_documents WHERE user_id = $1
         `, [userId]);
 
+    // Return with nested profile structure to match frontend expectations
     return {
-      ...userRes.rows[0],
+      user_id: row.user_id,
+      email: row.email,
+      phone: row.phone,
+      role: row.role,
+      created_at: row.created_at,
+      profile: {
+        full_name: row.full_name,
+        farm_name: row.farm_name,
+        address: row.address,
+        bank_account_number: row.bank_account_number,
+        bank_name: row.bank_name,
+        branch_code: row.branch_code,
+        verification_status: row.verification_status,
+        verification_reason: row.verification_reason,
+        latitude: row.latitude,
+        longitude: row.longitude,
+      },
       documents: docsRes.rows
     };
   }

@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Alert, RefreshControl } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ChevronRight } from "lucide-react-native";
 import { adminAPI } from "../../services/api";
+import { useFocusEffect } from "expo-router";
 
 export default function AdminVerificationsScreen() {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -38,8 +40,16 @@ export default function AdminVerificationsScreen() {
     }
   };
 
-  useEffect(() => {
-    load();
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
   }, []);
 
   const approve = async () => {
@@ -86,7 +96,10 @@ export default function AdminVerificationsScreen() {
       {loading ? (
         <View style={styles.loading}><ActivityIndicator size="large" color="#2d5016" /></View>
       ) : (
-        <ScrollView style={styles.content}>
+        <ScrollView 
+          style={styles.content}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2d5016']} />}
+        >
           <Text style={styles.sectionTitle}>Pending Applications</Text>
           {items.length === 0 ? (
             <Text style={styles.emptyText}>No pending applications.</Text>

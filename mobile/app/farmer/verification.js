@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator, TextInput } from "react-native";
+import React, { useState, useCallback } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Alert, ScrollView, ActivityIndicator, TextInput, RefreshControl } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI } from "../../services/api";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { CheckCircle, Clock, AlertTriangle, XCircle } from "lucide-react-native";
 
 export default function FarmerVerification() {
@@ -10,6 +10,7 @@ export default function FarmerVerification() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState(null);
   const [reason, setReason] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Document placeholders (IDs or descriptions). Image upload can be added later.
   const [govIdNumber, setGovIdNumber] = useState("");
@@ -26,8 +27,16 @@ export default function FarmerVerification() {
     } catch {}
   };
 
-  useEffect(() => {
-    refreshStatus();
+  useFocusEffect(
+    useCallback(() => {
+      refreshStatus();
+    }, [])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshStatus();
+    setRefreshing(false);
   }, []);
 
   const handleSubmit = async () => {
@@ -68,7 +77,11 @@ export default function FarmerVerification() {
   const statusDisplay = getStatusDisplay();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2d5016']} />}
+    >
       <Text style={styles.title}>Farmer Verification</Text>
       <Text style={styles.subtitle}>Upload the required documents for verification</Text>
 

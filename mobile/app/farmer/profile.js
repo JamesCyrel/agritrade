@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Platform } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useEffect, useState, useCallback } from "react";
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, ActivityIndicator, Alert, Platform, RefreshControl } from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { farmerAPI, farmerOrderAPI, productAPI, farmerReviewAPI } from "../../services/api";
 import { Wheat, Package, ClipboardList, DollarSign, Star, CheckCircle, Clock, AlertTriangle, XCircle } from "lucide-react-native";
@@ -21,6 +21,7 @@ const showAlert = (title, message, buttons) => {
 export default function FarmerProfileScreen() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState(null);
   const [reason, setReason] = useState(null);
   const [profile, setProfile] = useState({});
@@ -111,7 +112,11 @@ export default function FarmerProfileScreen() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
 
   const saveProfile = async () => {
     if (!farmName || !address || !bankAccountNumber || !bankName || !branchCode) {
@@ -169,6 +174,12 @@ export default function FarmerProfileScreen() {
     }
   };
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, []);
+
   if (loading) {
     return (
       <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
@@ -178,7 +189,11 @@ export default function FarmerProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#2d5016']} />}
+    >
       <Text style={styles.headerTitleInline}>My Profile</Text>
       <Text style={styles.headerSubtitleInline}>Manage your farm account</Text>
 
