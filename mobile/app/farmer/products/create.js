@@ -95,7 +95,7 @@ export default function CreateProductScreen() {
             const result = await ImagePicker.launchCameraAsync({
               allowsEditing: true,
               aspect: [4, 3],
-              quality: 0.8,
+              quality: 0.5,
             });
 
             if (!result.canceled && result.assets[0]) {
@@ -109,7 +109,7 @@ export default function CreateProductScreen() {
             const result = await ImagePicker.launchImageLibraryAsync({
               allowsEditing: true,
               aspect: [4, 3],
-              quality: 0.8,
+              quality: 0.5,
               allowsMultipleSelection: false,
             });
 
