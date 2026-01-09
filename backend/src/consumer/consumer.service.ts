@@ -351,7 +351,7 @@ export class ConsumerService implements OnModuleInit {
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
-            let totalAmount = 0, farmerId = null;
+            let subtotal = 0, farmerId = null;
             
             // Calculate prices and validate stock - all quantities in kg
             const itemsWithPrices: any[] = [];
@@ -377,15 +377,22 @@ export class ConsumerService implements OnModuleInit {
                 }
                 
                 const unitPrice = parseFloat(product.price_per_kg);
-                const subtotal = unitPrice * requestedQty;
-                totalAmount += subtotal;
+                const itemSubtotal = unitPrice * requestedQty;
+                subtotal += itemSubtotal;
                 farmerId = product.farmer_id;
-                itemsWithPrices.push({ ...item, unitPrice, subtotal, availableQty, varietyName: product.variety_name });
+                itemsWithPrices.push({ ...item, unitPrice, subtotal: itemSubtotal, availableQty, varietyName: product.variety_name });
             }
             
+            // Calculate delivery fee, tax, and total
+            const deliveryFee = 50; // Base delivery fee - can be made dynamic later
+            const tax = subtotal * 0.12; // 12% tax
+            const discountAmount = 0; // TODO: Apply promo code discount if any
+            const totalAmount = subtotal + deliveryFee + tax - discountAmount;
+            
             const orderRes = await client.query(
-                `INSERT INTO orders (user_id, farmer_id, address_id, total_amount, payment_method, notes) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-                [userId, farmerId, address_id, totalAmount, payment_method, notes]
+                `INSERT INTO orders (user_id, farmer_id, address_id, subtotal, delivery_fee, tax, discount_amount, total_amount, payment_method, notes) 
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+                [userId, farmerId, address_id, subtotal, deliveryFee, tax, discountAmount, totalAmount, payment_method, notes]
             );
             const order = orderRes.rows[0];
             

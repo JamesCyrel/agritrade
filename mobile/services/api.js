@@ -415,6 +415,10 @@ export const farmerOrderAPI = {
   updateOrderStatus: async (token, orderId, status) => {
     return await apiCall(`/farmer/orders/${orderId}/status`, 'PUT', { status }, token);
   },
+  // Mark order as not completed
+  markOrderNotCompleted: async (token, orderId, reason, notes = null) => {
+    return await apiCall(`/farmer/orders/${orderId}/not-completed`, 'POST', { reason, notes }, token);
+  },
 };
 
 // Reviews & Ratings API calls (Farmer)

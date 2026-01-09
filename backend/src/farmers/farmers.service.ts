@@ -228,22 +228,27 @@ export class FarmersService implements OnModuleInit {
     if (!res.rows[0]) return null;
 
     const order = res.rows[0];
+    
+    // Use stored values if available, otherwise calculate from total_amount for backward compatibility
+    let subtotal = parseFloat(order.subtotal) || 0;
+    let deliveryFee = parseFloat(order.delivery_fee) || 0;
+    let tax = parseFloat(order.tax) || 0;
+    const discountAmount = parseFloat(order.discount_amount) || 0;
     const totalAmount = parseFloat(order.total_amount) || 0;
 
-    // Calculate subtotal, delivery fee, and tax from total_amount
-    // Formula: total_amount = subtotal + delivery_fee + tax
-    // Assuming: delivery_fee = 50 (flat fee), tax = 12% of subtotal
-    // So: total = subtotal + 50 + (subtotal * 0.12) = subtotal * 1.12 + 50
-    // Therefore: subtotal = (total - 50) / 1.12
-    const deliveryFee = 50;
-    const subtotal = (totalAmount - deliveryFee) / 1.12;
-    const tax = subtotal * 0.12;
+    // Backward compatibility: if subtotal is 0 but total_amount exists, calculate the values
+    if (subtotal === 0 && totalAmount > 0) {
+      deliveryFee = 50;
+      subtotal = (totalAmount - deliveryFee) / 1.12;
+      tax = subtotal * 0.12;
+    }
 
     return {
       ...order,
       subtotal: subtotal.toFixed(2),
       delivery_fee: deliveryFee.toFixed(2),
-      tax: tax.toFixed(2)
+      tax: tax.toFixed(2),
+      discount_amount: discountAmount.toFixed(2)
     };
   }
 
@@ -338,6 +343,52 @@ export class FarmersService implements OnModuleInit {
 
       await client.query('COMMIT');
       return res.rows[0];
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  }
+
+  async markOrderNotCompleted(farmerId: number, orderId: number, reason: string, notes?: string) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Update order status to CANCELLED
+      const orderRes = await client.query(`
+        UPDATE orders SET status = 'CANCELLED', updated_at = NOW()
+        WHERE order_id = $1 AND farmer_id = $2 AND status IN ('CONFIRMED', 'PREPARING', 'OUT_FOR_DELIVERY')
+        RETURNING *
+      `, [orderId, farmerId]);
+
+      if (orderRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      // Record the reason in order_rejections table
+      await client.query(`
+        INSERT INTO order_rejections (order_id, reason, notes)
+        VALUES ($1, $2, $3)
+      `, [orderId, reason, notes || null]);
+
+      // Restore stock for cancelled order items
+      const orderItems = await client.query(
+        `SELECT product_id, quantity FROM order_items WHERE order_id = $1`,
+        [orderId]
+      );
+
+      for (const item of orderItems.rows) {
+        await client.query(
+          `UPDATE products SET available_quantity = available_quantity + $1, status = 'ACTIVE', updated_at = NOW() WHERE product_id = $2`,
+          [item.quantity, item.product_id]
+        );
+      }
+
+      await client.query('COMMIT');
+      return orderRes.rows[0];
     } catch (e) {
       await client.query('ROLLBACK');
       throw e;

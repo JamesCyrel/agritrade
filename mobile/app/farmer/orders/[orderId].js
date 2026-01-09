@@ -90,6 +90,8 @@ export default function OrderDetailScreen() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionNotes, setRejectionNotes] = useState("");
+  const [showNotCompletedModal, setShowNotCompletedModal] = useState(false);
+  const [notCompletedExplanation, setNotCompletedExplanation] = useState("");
 
   useEffect(() => {
     loadOrderDetails();
@@ -182,6 +184,50 @@ export default function OrderDetailScreen() {
             } catch (error) {
               console.error("Reject order error:", error);
               Alert.alert("Error", error.message || "Failed to reject order");
+            } finally {
+              setProcessing(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleMarkNotCompleted = () => {
+    if (!notCompletedExplanation.trim()) {
+      Alert.alert("Error", "Please provide an explanation for why the order was not completed");
+      return;
+    }
+
+    Alert.alert(
+      "Order Not Completed",
+      "Are you sure you want to mark this order as not completed? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setProcessing(true);
+              const token = await AsyncStorage.getItem("authToken");
+              const res = await farmerOrderAPI.markOrderNotCompleted(
+                token,
+                orderId,
+                "ORDER_NOT_COMPLETED",
+                notCompletedExplanation
+              );
+              if (res.success) {
+                Alert.alert("Success", "Order marked as not completed");
+                setShowNotCompletedModal(false);
+                setNotCompletedExplanation("");
+                loadOrderDetails();
+              } else {
+                Alert.alert("Error", res.message || "Failed to update order");
+              }
+            } catch (error) {
+              console.error("Mark not completed error:", error);
+              Alert.alert("Error", error.message || "Failed to update order");
             } finally {
               setProcessing(false);
             }
@@ -396,6 +442,21 @@ export default function OrderDetailScreen() {
             )}
           </TouchableOpacity>
         )}
+
+        {/* Order Not Completed Button - Show for confirmed, preparing, or out for delivery orders */}
+        {(order.status === ORDER_STATUSES.CONFIRMED || 
+          order.status === ORDER_STATUSES.PREPARING || 
+          order.status === ORDER_STATUSES.OUT_FOR_DELIVERY) && (
+          <TouchableOpacity
+            style={[styles.actionButton, styles.notCompletedButton]}
+            onPress={() => setShowNotCompletedModal(true)}
+            disabled={processing}
+          >
+            <Text style={[styles.actionButtonText, styles.notCompletedButtonText]}>
+              Order Not Completed
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Reject Modal */}
@@ -460,6 +521,57 @@ export default function OrderDetailScreen() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.modalConfirmText}>Reject</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Order Not Completed Modal */}
+      <Modal
+        visible={showNotCompletedModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowNotCompletedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Order Not Completed</Text>
+            <Text style={styles.modalSubtitle}>
+              Please explain why this order could not be completed. This information will be recorded for reference.
+            </Text>
+
+            <Text style={styles.notesLabel}>Explanation (Required)</Text>
+            <TextInput
+              style={styles.explanationInput}
+              placeholder="Enter the reason why the order was not completed..."
+              value={notCompletedExplanation}
+              onChangeText={setNotCompletedExplanation}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalCancelButton]}
+                onPress={() => {
+                  setShowNotCompletedModal(false);
+                  setNotCompletedExplanation("");
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.notCompletedConfirmButton]}
+                onPress={handleMarkNotCompleted}
+                disabled={processing || !notCompletedExplanation.trim()}
+              >
+                {processing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirm</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -734,6 +846,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
     color: "#fff",
+  },
+  notCompletedButton: {
+    backgroundColor: "#fff",
+    borderWidth: 2,
+    borderColor: "#f44336",
+  },
+  notCompletedButtonText: {
+    color: "#f44336",
+  },
+  notCompletedConfirmButton: {
+    backgroundColor: "#f44336",
+  },
+  explanationInput: {
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    minHeight: 100,
+    textAlignVertical: "top",
   },
 });
 

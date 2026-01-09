@@ -99,6 +99,15 @@ export class FarmersController {
         }
     }
 
+    @Post('orders/:orderId/not-completed')
+    async markOrderNotCompleted(@Request() req, @Param('orderId') orderId: string, @Body() body: any) {
+        const { reason, notes } = body;
+        if (!reason) throw new BadRequestException('Explanation is required');
+        const order = await this.farmersService.markOrderNotCompleted(req.user.userId, parseInt(orderId), reason, notes);
+        if (!order) throw new NotFoundException('Order not found or cannot be marked as not completed');
+        return { success: true, message: 'Order marked as not completed', data: order };
+    }
+
     // ===================== Farmer Ledger =====================
     @Get('ledger')
     async getLedger(@Request() req) {

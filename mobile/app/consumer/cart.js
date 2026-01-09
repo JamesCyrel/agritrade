@@ -125,7 +125,7 @@ export default function ConsumerCartScreen() {
     ]);
   };
 
-  const deliveryFee = 20; // Base delivery fee
+  const deliveryFee = 50; // Base delivery fee
   const tax = cartData.subtotal * 0.12; // 12% tax
   const total = cartData.subtotal + deliveryFee + tax;
 

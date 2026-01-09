@@ -240,7 +240,7 @@ export default function CheckoutScreen() {
     }
   };
 
-  const deliveryFee = 20;
+  const deliveryFee = 50;
   const discountAmount = appliedPromo?.discount_amount || 0;
   const subtotalAfterDiscount = cartData.subtotal - discountAmount;
   const tax = subtotalAfterDiscount * 0.12;
